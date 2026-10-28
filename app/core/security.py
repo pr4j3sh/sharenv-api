@@ -1,9 +1,10 @@
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import jwt
 from pwdlib import PasswordHash
 
 from app.core.config import settings
+from app.core.utils import get_current_time
 
 password_hash = PasswordHash.recommended()
 
@@ -17,7 +18,7 @@ def verify_password(password: str, hashed_password: str) -> bool:
 
 
 def create_access_token(subject: str) -> str:
-    now = datetime.now(UTC)
+    now = get_current_time()
 
     payload = {
         "sub": subject,

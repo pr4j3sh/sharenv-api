@@ -15,14 +15,14 @@ log = get_logger(__name__)
 
 class Auth:
     def __init__(self) -> None:
-        pass
+        self.db = mongo
 
     async def register(self, payload: RegisterReq) -> RegisterRes:
         log.info(f"registering user {payload.email}")
-        if mongo.users is None:
+        if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
-        user_exists = await mongo.users.find_one(
+        user_exists = await self.db.users.find_one(
             {"email": payload.email.strip().lower()}
         )
         if user_exists:
@@ -32,7 +32,7 @@ class Auth:
             "email": payload.email.strip().lower(),
             "password": hash_password(payload.password),
         }
-        res = await mongo.users.insert_one(user_payload)
+        res = await self.db.users.insert_one(user_payload)
 
         if not res or not res.inserted_id:
             raise RegisterError("Failed to register user")
@@ -47,10 +47,10 @@ class Auth:
     async def login(self, payload: LoginReq) -> LoginRes:
         log.info(f"logging in user {payload.email}")
 
-        if mongo.users is None:
+        if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
-        user = await mongo.users.find_one({"email": payload.email.strip().lower()})
+        user = await self.db.users.find_one({"email": payload.email.strip().lower()})
         if not user:
             raise UserNotFound("User not found")
 
