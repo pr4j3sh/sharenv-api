@@ -1,3 +1,6 @@
+from bson.objectid import ObjectId
+
+from app.api.v1.auth.exceptions import UserNotFound
 from app.api.v1.project.exceptions import CreateProjectError, ProjectAlreadyExists
 from app.api.v1.project.schemas import CreateProjectReq, CreateProjectRes
 from app.core.logger import get_logger
@@ -16,8 +19,13 @@ class Project:
     ) -> CreateProjectRes:
         log.info(f"creating project {user_id} {payload}")
 
-        if self.db.projects is None:
+        if self.db.projects is None or self.db.users is None:
             raise RuntimeError("mongodb is not connected")
+
+        user = self.db.users.find_one({"_id": ObjectId(user_id)})
+
+        if not user:
+            raise UserNotFound("User does not exist")
 
         project_exists = await self.db.projects.find_one(
             {"name": payload.name, "user_id": user_id}

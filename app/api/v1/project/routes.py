@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.v1.auth.exceptions import UserNotFound
 from app.api.v1.project.exceptions import CreateProjectError, ProjectAlreadyExists
 from app.api.v1.project.schemas import CreateProjectReq, CreateProjectRes
 from app.api.v1.project.service import Project
@@ -22,6 +23,11 @@ async def create_project(
         p = Project()
         res = await p.create_project(user_id, req)
         return res
+    except UserNotFound as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e),
+        ) from e
     except ProjectAlreadyExists as e:
         raise HTTPException(
             status_code=409,

@@ -4,3 +4,7 @@ class ProjectAlreadyExists(Exception):
 
 class CreateProjectError(Exception):
     pass
+
+
+class ProjectNotFound(Exception):
+    pass
