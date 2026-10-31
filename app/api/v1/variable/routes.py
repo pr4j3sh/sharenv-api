@@ -15,7 +15,7 @@ log = get_logger(__name__)
 
 
 @router.post("/{environment_id}", response_model=CreateVariableRes)
-async def create_project(
+async def create_variable(
     environment_id: str,
     req: CreateVariableReq,
     _: Annotated[str, Depends(get_current_user_id)],

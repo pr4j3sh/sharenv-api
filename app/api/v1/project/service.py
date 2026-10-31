@@ -22,7 +22,7 @@ class Project:
         if self.db.projects is None or self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
-        user = self.db.users.find_one({"_id": ObjectId(user_id)})
+        user = await self.db.users.find_one({"_id": ObjectId(user_id)})
 
         if not user:
             raise UserNotFound("User does not exist")

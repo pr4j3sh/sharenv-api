@@ -25,11 +25,11 @@ class Environment:
         if self.db.environments is None or self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
 
-        project = self.db.projects.find_one({"_id": ObjectId(project_id)})
+        project = await self.db.projects.find_one({"_id": ObjectId(project_id)})
         if not project:
             raise ProjectNotFound("Project does not exist")
 
-        environment_exists = self.db.environments.find_one(
+        environment_exists = await self.db.environments.find_one(
             {"name": payload.name, "project_id": project_id}
         )
         if environment_exists:

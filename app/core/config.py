@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,13 @@ class Settings(BaseSettings):
     JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY: int = 60
+
+    @field_validator("JWT_SECRET")
+    @classmethod
+    def validate_jwt_secret(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("JWT_SECRET must not be empty")
+        return value
 
 
 settings = Settings()

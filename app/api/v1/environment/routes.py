@@ -18,7 +18,7 @@ log = get_logger(__name__)
 
 
 @router.post("/{project_id}", response_model=CreateEnvironmentRes)
-async def create_project(
+async def create_environemnt(
     project_id: str,
     req: CreateEnvironmentReq,
     _: Annotated[str, Depends(get_current_user_id)],

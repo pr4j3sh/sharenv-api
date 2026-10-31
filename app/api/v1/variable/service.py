@@ -22,11 +22,11 @@ class Variable:
         if self.db.environments is None or self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        project = self.db.environments.find_one({"_id": ObjectId(environment_id)})
+        project = await self.db.environments.find_one({"_id": ObjectId(environment_id)})
         if not project:
             raise EnvironmentNotFound("Environment does not exist")
 
-        variable_exists = self.db.variables.find_one(
+        variable_exists = await self.db.variables.find_one(
             {"name": payload.name, "environment_id": environment_id}
         )
         if variable_exists:
