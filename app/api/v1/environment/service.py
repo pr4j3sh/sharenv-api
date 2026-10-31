@@ -3,7 +3,9 @@ from bson.objectid import ObjectId
 from app.api.v1.environment.exceptions import (
     CreateEnvironmentError,
     EnvironmentAlreadyExists,
+    EnvironmentNotFound,
 )
+from app.api.v1.environment.models import EnvironmentModel
 from app.api.v1.environment.schemas import CreateEnvironmentReq, CreateEnvironmentRes
 from app.api.v1.project.exceptions import ProjectNotFound
 from app.core.logger import get_logger
@@ -37,15 +39,41 @@ class Environment:
 
         now = get_current_time()
 
-        environment_payload = {
-            "name": payload.name,
-            "project_id": project_id,
-            "created_at": now,
-            "updated_at": now,
-        }
-        res = await self.db.environments.insert_one(environment_payload)
+        environment_payload = EnvironmentModel(
+            name=payload.name,
+            project_id=project_id,
+            created_at=now,
+            updated_at=now,
+        )
+
+        res = await self.db.environments.insert_one(
+            environment_payload.model_dump(
+                by_alias=True,
+                exclude_none=True,
+            )
+        )
 
         if not res or not res.inserted_id:
             raise CreateEnvironmentError("failed to create environment")
 
         return CreateEnvironmentRes(environment_id=str(res.inserted_id))
+
+    async def get_environment_by_name(
+        self, project_id: str, environment_name: str
+    ) -> EnvironmentModel:
+        log.info(f"fetching environment {project_id} {environment_name}")
+
+        if self.db.environments is None or self.db.projects is None:
+            raise RuntimeError("mongodb is not connected")
+
+        project = await self.db.projects.find_one({"_id": ObjectId(project_id)})
+        if not project:
+            raise ProjectNotFound("Project does not exist")
+
+        environment = await self.db.environments.find_one(
+            {"name": environment_name, "project_id": project_id}
+        )
+        if not environment:
+            raise EnvironmentNotFound("environment does not exist")
+
+        return EnvironmentModel.model_validate(environment)

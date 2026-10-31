@@ -1,7 +1,12 @@
 from bson.objectid import ObjectId
 
 from app.api.v1.auth.exceptions import UserNotFound
-from app.api.v1.project.exceptions import CreateProjectError, ProjectAlreadyExists
+from app.api.v1.project.exceptions import (
+    CreateProjectError,
+    ProjectAlreadyExists,
+    ProjectNotFound,
+)
+from app.api.v1.project.models import ProjectModel
 from app.api.v1.project.schemas import CreateProjectReq, CreateProjectRes
 from app.core.logger import get_logger
 from app.core.utils import get_current_time
@@ -35,16 +40,39 @@ class Project:
 
         now = get_current_time()
 
-        project_payload = {
-            "name": payload.name,
-            "user_id": user_id,
-            "created_at": now,
-            "updated_at": now,
-        }
+        project_payload = ProjectModel(
+            name=payload.name, user_id=user_id, created_at=now, updated_at=now
+        )
 
-        res = await self.db.projects.insert_one(project_payload)
+        res = await self.db.projects.insert_one(
+            project_payload.model_dump(
+                by_alias=True,
+                exclude_none=True,
+            )
+        )
 
         if not res or not res.inserted_id:
             raise CreateProjectError("failed to create project")
 
         return CreateProjectRes(project_id=str(res.inserted_id))
+
+    async def get_project_by_name(
+        self, user_id: str, project_name: str
+    ) -> ProjectModel:
+        log.info(f"creating project {user_id} {project_name}")
+
+        if self.db.projects is None or self.db.users is None:
+            raise RuntimeError("mongodb is not connected")
+
+        user = await self.db.users.find_one({"_id": ObjectId(user_id)})
+
+        if not user:
+            raise UserNotFound("User does not exist")
+
+        project = await self.db.projects.find_one(
+            {"name": project_name, "user_id": user_id}
+        )
+        if not project:
+            raise ProjectNotFound("project does not exist")
+
+        return ProjectModel.model_validate(project)

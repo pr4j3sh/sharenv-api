@@ -5,6 +5,7 @@ from app.api.v1.auth.exceptions import (
     UserAlreadyExists,
     UserNotFound,
 )
+from app.api.v1.auth.models import UserModel
 from app.api.v1.auth.schemas import LoginReq, LoginRes, RegisterReq, RegisterRes
 from app.core.logger import get_logger
 from app.core.security import create_access_token, hash_password, verify_password
@@ -28,11 +29,11 @@ class Auth:
         if user_exists:
             raise UserAlreadyExists(f"User already exists with email {payload.email}")
 
-        user_payload = {
-            "email": payload.email.strip().lower(),
-            "password": hash_password(payload.password),
-        }
-        res = await self.db.users.insert_one(user_payload)
+        user_payload = UserModel(
+            email=payload.email.strip().lower(),
+            password=hash_password(payload.password),
+        )
+        res = await self.db.users.insert_one(user_payload.model_dump())
 
         if not res or not res.inserted_id:
             raise RegisterError("Failed to register user")
