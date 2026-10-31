@@ -62,27 +62,6 @@ class Project:
 
         return CreateProjectRes(project_id=str(res.inserted_id))
 
-    async def get_project_by_name(
-        self, user_id: str, project_name: str
-    ) -> ProjectModel:
-        log.info(f"creating project {user_id} {project_name}")
-
-        if self.db.projects is None or self.db.users is None:
-            raise RuntimeError("mongodb is not connected")
-
-        user = await self.db.users.find_one({"_id": ObjectId(user_id)})
-
-        if not user:
-            raise UserNotFound("User does not exist")
-
-        project = await self.db.projects.find_one(
-            {"name": project_name, "user_id": user_id}
-        )
-        if not project:
-            raise ProjectNotFound("project does not exist")
-
-        return ProjectModel.model_validate(project)
-
     async def add_user(
         self, user_id: str, project_id: str, payload: AddUserReq
     ) -> AddUserRes:
@@ -122,7 +101,9 @@ class Project:
 
         return AddUserRes(project_id=project_id)
 
-    async def get_projects(self, user_id: str) -> list[ProjectModel]:
+    async def get_projects(
+        self, user_id: str, project_name: str | None = None
+    ) -> list[ProjectModel]:
         log.info(f"fetching projects {user_id}")
 
         if self.db.projects is None or self.db.users is None:
@@ -133,8 +114,11 @@ class Project:
         if not user_exists:
             raise UserNotFound("User does not exist")
 
-        projects = await self.db.projects.find({"user_id": user_id}).to_list(
-            length=None
-        )
+        query = {"user_id": user_id}
+
+        if project_name is not None:
+            query["name"] = project_name
+
+        projects = await self.db.projects.find(query).to_list(length=None)
 
         return [ProjectModel.model_validate(project) for project in projects]

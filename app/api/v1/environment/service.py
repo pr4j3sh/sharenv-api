@@ -4,7 +4,6 @@ from app.api.v1.auth.exceptions import UnauthorizedAccess, UserNotFound
 from app.api.v1.environment.exceptions import (
     CreateEnvironmentError,
     EnvironmentAlreadyExists,
-    EnvironmentNotFound,
 )
 from app.api.v1.environment.models import EnvironmentModel
 from app.api.v1.environment.schemas import CreateEnvironmentReq, CreateEnvironmentRes
@@ -70,51 +69,8 @@ class Environment:
 
         return CreateEnvironmentRes(environment_id=str(res.inserted_id))
 
-    async def get_environment_by_name(
-        self, user_id: str, project_id: str, environment_name: str
-    ) -> EnvironmentModel:
-        log.info(f"fetching environment {project_id} {environment_name}")
-
-        if (
-            self.db.environments is None
-            or self.db.projects is None
-            or self.db.users is None
-        ):
-            raise RuntimeError("mongodb is not connected")
-
-        user = await self.db.users.find_one({"_id": ObjectId(user_id)})
-
-        if not user:
-            raise UserNotFound("User does not exist")
-
-        project = await self.db.projects.find_one({"_id": ObjectId(project_id)})
-
-        if not project:
-            raise ProjectNotFound("Project does not exist")
-
-        user_exists = await self.db.projects.find_one(
-            {
-                "_id": ObjectId(project_id),
-                "$or": [
-                    {"user_id": user_id},
-                    {"users": user_id},
-                ],
-            }
-        )
-
-        if not user_exists:
-            raise UnauthorizedAccess("Unauthorized Access")
-
-        environment = await self.db.environments.find_one(
-            {"name": environment_name, "project_id": project_id}
-        )
-        if not environment:
-            raise EnvironmentNotFound("environment does not exist")
-
-        return EnvironmentModel.model_validate(environment)
-
     async def get_environments(
-        self, user_id: str, project_id: str
+        self, user_id: str, project_id: str, environment_name: str | None = None
     ) -> list[EnvironmentModel]:
         log.info(f"fetching environments {user_id} {project_id}")
 
@@ -148,9 +104,12 @@ class Environment:
         if not user_exists:
             raise UnauthorizedAccess("Unauthorized Access")
 
-        environments = await self.db.environments.find(
-            {"project_id": str(project.get("_id"))}
-        ).to_list(length=None)
+        query = {"project_id": project_id}
+
+        if environment_name is not None:
+            query["name"] = environment_name
+
+        environments = await self.db.environments.find(query).to_list(length=None)
 
         return [
             EnvironmentModel.model_validate(environment) for environment in environments
