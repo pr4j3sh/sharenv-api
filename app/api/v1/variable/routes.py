@@ -30,7 +30,7 @@ async def get_variables(
             detail=str(e),
         ) from e
     except Exception as e:
-        log.exception("Project creation failed unexpectedly")
+        log.exception("fetching variables failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",
@@ -63,7 +63,7 @@ async def create_variable(
             detail=str(e),
         ) from e
     except Exception as e:
-        log.exception("Project creation failed unexpectedly")
+        log.exception("creating variable failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",

@@ -44,7 +44,28 @@ async def get_project_by_name(
             detail=str(e),
         ) from e
     except Exception as e:
-        log.exception("Project creation failed unexpectedly")
+        log.exception("fetching project by name failed unexpectedly")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal Server Error",
+        ) from e
+
+
+@router.get("/", response_model=list[ProjectModel])
+async def get_projects(
+    user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    try:
+        p = Project()
+        res = await p.get_projects(user_id)
+        return res
+    except UserNotFound as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        log.exception("fetching projects failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",
@@ -76,7 +97,7 @@ async def create_project(
             detail=str(e),
         ) from e
     except Exception as e:
-        log.exception("Project creation failed unexpectedly")
+        log.exception("creating project failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",
@@ -104,7 +125,7 @@ async def add_user(
             detail=str(e),
         ) from e
     except Exception as e:
-        log.exception("Project creation failed unexpectedly")
+        log.exception("adding user to project failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",

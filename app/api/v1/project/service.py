@@ -121,3 +121,20 @@ class Project:
         log.info(res)
 
         return AddUserRes(project_id=project_id)
+
+    async def get_projects(self, user_id: str) -> list[ProjectModel]:
+        log.info(f"fetching projects {user_id}")
+
+        if self.db.projects is None or self.db.users is None:
+            raise RuntimeError("mongodb is not connected")
+
+        user_exists = await self.db.users.find_one({"_id": ObjectId(user_id)})
+
+        if not user_exists:
+            raise UserNotFound("User does not exist")
+
+        projects = await self.db.projects.find({"user_id": user_id}).to_list(
+            length=None
+        )
+
+        return [ProjectModel.model_validate(project) for project in projects]

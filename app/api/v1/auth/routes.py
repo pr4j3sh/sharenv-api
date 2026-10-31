@@ -38,7 +38,7 @@ async def register(req: RegisterReq):
             detail=str(e),
         ) from e
     except Exception as e:
-        log.exception("Registration failed unexpectedly")
+        log.exception("registration failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",
@@ -67,7 +67,7 @@ async def login(req: LoginReq):
             detail=str(e),
         ) from e
     except Exception as e:
-        log.exception("Login failed unexpectedly")
+        log.exception("login failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",

@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.api.v1.auth.exceptions import UnauthorizedAccess
+from app.api.v1.auth.exceptions import UnauthorizedAccess, UserNotFound
 from app.api.v1.environment.exceptions import (
     CreateEnvironmentError,
     EnvironmentAlreadyExists,
@@ -47,7 +47,39 @@ async def get_environment_by_name(
             detail=str(e),
         ) from e
     except Exception as e:
-        log.exception("Fetching environment failed unexpectedly")
+        log.exception("fetching environment by name failed unexpectedly")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal Server Error",
+        ) from e
+
+
+@router.get("/{project_id}", response_model=list[EnvironmentModel])
+async def get_environments(
+    project_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    try:
+        e = Environment()
+        res = await e.get_environments(user_id, project_id)
+        return res
+    except UserNotFound as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e),
+        ) from e
+    except ProjectNotFound as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e),
+        ) from e
+    except UnauthorizedAccess as e:
+        raise HTTPException(
+            status_code=409,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        log.exception("fetching environments failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",
@@ -80,7 +112,7 @@ async def create_environemnt(
             detail=str(e),
         ) from e
     except Exception as e:
-        log.exception("Environment creation failed unexpectedly")
+        log.exception("creating environments failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",
