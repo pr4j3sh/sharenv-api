@@ -18,3 +18,11 @@ class CreateProjectReq(BaseModel):
 
 class CreateProjectRes(BaseModel):
     project_id: str
+
+
+class AddUserReq(BaseModel):
+    email: str
+
+
+class AddUserRes(BaseModel):
+    project_id: str

@@ -1,5 +1,6 @@
 from bson.objectid import ObjectId
 
+from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import (
     CreateEnvironmentError,
     EnvironmentAlreadyExists,
@@ -20,14 +21,16 @@ class Environment:
         self.db = mongo
 
     async def create_environemnt(
-        self, project_id: str, payload: CreateEnvironmentReq
+        self, user_id: str, project_id: str, payload: CreateEnvironmentReq
     ) -> CreateEnvironmentRes:
         log.info(f"creating environment {project_id} {payload}")
 
         if self.db.environments is None or self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
 
-        project = await self.db.projects.find_one({"_id": ObjectId(project_id)})
+        project = await self.db.projects.find_one(
+            {"_id": ObjectId(project_id), "user_id": user_id}
+        )
         if not project:
             raise ProjectNotFound("Project does not exist")
 
@@ -59,16 +62,34 @@ class Environment:
         return CreateEnvironmentRes(environment_id=str(res.inserted_id))
 
     async def get_environment_by_name(
-        self, project_id: str, environment_name: str
+        self, user_id: str, project_id: str, environment_name: str
     ) -> EnvironmentModel:
         log.info(f"fetching environment {project_id} {environment_name}")
 
         if self.db.environments is None or self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
 
-        project = await self.db.projects.find_one({"_id": ObjectId(project_id)})
+        project = await self.db.projects.find_one(
+            {
+                "_id": ObjectId(project_id),
+            }
+        )
+
         if not project:
             raise ProjectNotFound("Project does not exist")
+
+        user_exists = await self.db.projects.find_one(
+            {
+                "_id": ObjectId(project_id),
+                "$or": [
+                    {"user_id": user_id},
+                    {"users": user_id},
+                ],
+            }
+        )
+
+        if not user_exists:
+            raise UnauthorizedAccess("Unauthorized Access")
 
         environment = await self.db.environments.find_one(
             {"name": environment_name, "project_id": project_id}

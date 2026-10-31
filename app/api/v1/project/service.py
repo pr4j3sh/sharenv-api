@@ -2,12 +2,18 @@ from bson.objectid import ObjectId
 
 from app.api.v1.auth.exceptions import UserNotFound
 from app.api.v1.project.exceptions import (
+    CannotAddSameUser,
     CreateProjectError,
     ProjectAlreadyExists,
     ProjectNotFound,
 )
 from app.api.v1.project.models import ProjectModel
-from app.api.v1.project.schemas import CreateProjectReq, CreateProjectRes
+from app.api.v1.project.schemas import (
+    AddUserReq,
+    AddUserRes,
+    CreateProjectReq,
+    CreateProjectRes,
+)
 from app.core.logger import get_logger
 from app.core.utils import get_current_time
 from app.db.mongodb import mongo
@@ -76,3 +82,42 @@ class Project:
             raise ProjectNotFound("project does not exist")
 
         return ProjectModel.model_validate(project)
+
+    async def add_user(
+        self, user_id: str, project_id: str, payload: AddUserReq
+    ) -> AddUserRes:
+        log.info(f"creating project {user_id} {project_id}")
+
+        if self.db.projects is None or self.db.users is None:
+            raise RuntimeError("mongodb is not connected")
+
+        user_exists = await self.db.users.find_one({"_id": ObjectId(user_id)})
+
+        if not user_exists:
+            raise UserNotFound("User does not exist")
+
+        project = await self.db.projects.find_one(
+            {"_id": ObjectId(project_id), "user_id": user_id}
+        )
+        if not project:
+            raise ProjectNotFound("project does not exist")
+
+        user = await self.db.users.find_one({"email": payload.email})
+
+        if not user:
+            raise UserNotFound("User does not exist")
+
+        if user_id == str(user.get("_id")):
+            raise CannotAddSameUser("Cannot add same user")
+
+        res = await self.db.projects.find_one_and_update(
+            {"_id": ObjectId(project_id)},
+            {"$addToSet": {"users": str(user.get("_id"))}},
+        )
+
+        if not res:
+            raise ProjectNotFound("project does not exist")
+
+        log.info(res)
+
+        return AddUserRes(project_id=project_id)

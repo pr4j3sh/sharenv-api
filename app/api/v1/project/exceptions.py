@@ -8,3 +8,7 @@ class CreateProjectError(Exception):
 
 class ProjectNotFound(Exception):
     pass
+
+
+class CannotAddSameUser(Exception):
+    pass

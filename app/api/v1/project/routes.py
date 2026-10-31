@@ -9,7 +9,12 @@ from app.api.v1.project.exceptions import (
     ProjectNotFound,
 )
 from app.api.v1.project.models import ProjectModel
-from app.api.v1.project.schemas import CreateProjectReq, CreateProjectRes
+from app.api.v1.project.schemas import (
+    AddUserReq,
+    AddUserRes,
+    CreateProjectReq,
+    CreateProjectRes,
+)
 from app.api.v1.project.service import Project
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
@@ -68,6 +73,34 @@ async def create_project(
     except CreateProjectError as e:
         raise HTTPException(
             status_code=500,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        log.exception("Project creation failed unexpectedly")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal Server Error",
+        ) from e
+
+
+@router.put("/{project_id}", response_model=AddUserRes)
+async def add_user(
+    project_id: str,
+    req: AddUserReq,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    try:
+        p = Project()
+        res = await p.add_user(user_id, project_id, req)
+        return res
+    except UserNotFound as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e),
+        ) from e
+    except ProjectNotFound as e:
+        raise HTTPException(
+            status_code=409,
             detail=str(e),
         ) from e
     except Exception as e:

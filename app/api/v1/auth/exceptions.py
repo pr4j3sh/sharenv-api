@@ -16,3 +16,7 @@ class RegisterError(Exception):
 
 class CreateTokenError(Exception):
     pass
+
+
+class UnauthorizedAccess(Exception):
+    pass

@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import (
     CreateEnvironmentError,
     EnvironmentAlreadyExists,
@@ -23,14 +24,19 @@ log = get_logger(__name__)
 async def get_environment_by_name(
     project_id: str,
     environment_name: str,
-    _: Annotated[str, Depends(get_current_user_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
 ):
     try:
         e = Environment()
-        res = await e.get_environment_by_name(project_id, environment_name)
+        res = await e.get_environment_by_name(user_id, project_id, environment_name)
         log.info(res)
         return res
     except ProjectNotFound as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e),
+        ) from e
+    except UnauthorizedAccess as e:
         raise HTTPException(
             status_code=401,
             detail=str(e),
@@ -52,11 +58,11 @@ async def get_environment_by_name(
 async def create_environemnt(
     project_id: str,
     req: CreateEnvironmentReq,
-    _: Annotated[str, Depends(get_current_user_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
 ):
     try:
         e = Environment()
-        res = await e.create_environemnt(project_id, req)
+        res = await e.create_environemnt(user_id, project_id, req)
         return res
     except ProjectNotFound as e:
         raise HTTPException(
