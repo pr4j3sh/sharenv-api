@@ -17,4 +17,10 @@ async def startup(app: FastAPI):
 
 app = FastAPI(title="sharenv API", lifespan=startup)
 
+
+@app.get("/health", tags=["Health"])
+async def health():
+    return {"status": "ok"}
+
+
 app.include_router(router)

@@ -1,5 +1,6 @@
 from bson.objectid import ObjectId
 
+from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import EnvironmentNotFound
 from app.api.v1.variable.exceptions import CreateVariableError, VariableAlreadyExists
 from app.api.v1.variable.models import VariableModel
@@ -15,17 +16,38 @@ class Variable:
     def __init__(self) -> None:
         self.db = mongo
 
+    async def _get_environment_for_user(
+        self, user_id: str, environment_id: str
+    ) -> dict:
+        if self.db.environments is None or self.db.projects is None:
+            raise RuntimeError("mongodb is not connected")
+
+        environment = await self.db.environments.find_one(
+            {"_id": ObjectId(environment_id)}
+        )
+        if not environment:
+            raise EnvironmentNotFound("Environment does not exist")
+
+        project = await self.db.projects.find_one(
+            {
+                "_id": ObjectId(environment["project_id"]),
+                "$or": [{"user_id": user_id}, {"users": user_id}],
+            }
+        )
+        if not project:
+            raise UnauthorizedAccess("Unauthorized Access")
+
+        return environment
+
     async def create_variable(
-        self, environment_id: str, payload: CreateVariableReq
+        self, user_id: str, environment_id: str, payload: CreateVariableReq
     ) -> CreateVariableRes:
         log.info(f"creating variable {environment_id} {payload}")
 
         if self.db.environments is None or self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        project = await self.db.environments.find_one({"_id": ObjectId(environment_id)})
-        if not project:
-            raise EnvironmentNotFound("Environment does not exist")
+        await self._get_environment_for_user(user_id, environment_id)
 
         variable_exists = await self.db.variables.find_one(
             {"name": payload.name, "environment_id": environment_id}
@@ -52,17 +74,15 @@ class Variable:
 
         return CreateVariableRes(variable_id=str(res.inserted_id))
 
-    async def get_variables(self, environment_id: str) -> list[VariableModel]:
+    async def get_variables(
+        self, user_id: str, environment_id: str
+    ) -> list[VariableModel]:
         log.info(f"fetching variables {environment_id}")
 
         if self.db.environments is None or self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        environment = await self.db.environments.find_one(
-            {"_id": ObjectId(environment_id)}
-        )
-        if not environment:
-            raise EnvironmentNotFound("Environment does not exist")
+        await self._get_environment_for_user(user_id, environment_id)
 
         variables = await self.db.variables.find(
             {"environment_id": environment_id}

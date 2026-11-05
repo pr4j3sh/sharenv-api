@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import EnvironmentNotFound
 from app.api.v1.variable.exceptions import CreateVariableError, VariableAlreadyExists
 from app.api.v1.variable.models import VariableModel
@@ -18,15 +19,20 @@ log = get_logger(__name__)
 @router.get("/{environment_id}", response_model=list[VariableModel])
 async def get_variables(
     environment_id: str,
-    _: Annotated[str, Depends(get_current_user_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
 ):
     try:
         v = Variable()
-        res = await v.get_variables(environment_id)
+        res = await v.get_variables(user_id, environment_id)
         return res
     except EnvironmentNotFound as e:
         raise HTTPException(
             status_code=401,
+            detail=str(e),
+        ) from e
+    except UnauthorizedAccess as e:
+        raise HTTPException(
+            status_code=403,
             detail=str(e),
         ) from e
     except Exception as e:
@@ -41,15 +47,20 @@ async def get_variables(
 async def create_variable(
     environment_id: str,
     req: CreateVariableReq,
-    _: Annotated[str, Depends(get_current_user_id)],
+    user_id: Annotated[str, Depends(get_current_user_id)],
 ):
     try:
         v = Variable()
-        res = await v.create_variable(environment_id, req)
+        res = await v.create_variable(user_id, environment_id, req)
         return res
     except EnvironmentNotFound as e:
         raise HTTPException(
             status_code=401,
+            detail=str(e),
+        ) from e
+    except UnauthorizedAccess as e:
+        raise HTTPException(
+            status_code=403,
             detail=str(e),
         ) from e
     except VariableAlreadyExists as e:

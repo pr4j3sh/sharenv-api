@@ -37,7 +37,10 @@ class Environment:
             raise UserNotFound("User does not exist")
 
         project = await self.db.projects.find_one(
-            {"_id": ObjectId(project_id), "user_id": user_id}
+            {
+                "_id": ObjectId(project_id),
+                "$or": [{"user_id": user_id}, {"users": user_id}],
+            }
         )
         if not project:
             raise ProjectNotFound("Project does not exist")
