@@ -114,7 +114,7 @@ class Project:
         if not user_exists:
             raise UserNotFound("User does not exist")
 
-        query = {"user_id": user_id}
+        query = {"$or": [{"user_id": user_id}, {"users": user_id}]}
 
         if project_name is not None:
             query["name"] = project_name

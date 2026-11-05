@@ -5,8 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import EnvironmentNotFound
 from app.api.v1.variable.exceptions import CreateVariableError, VariableAlreadyExists
-from app.api.v1.variable.models import VariableModel
-from app.api.v1.variable.schemas import CreateVariableReq, CreateVariableRes
+from app.api.v1.variable.schemas import (
+    CreateVariableReq,
+    CreateVariableRes,
+    VariableRes,
+)
 from app.api.v1.variable.service import Variable
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
@@ -16,7 +19,7 @@ router = APIRouter(prefix="/variable", tags=["Variable"])
 log = get_logger(__name__)
 
 
-@router.get("/{environment_id}", response_model=list[VariableModel])
+@router.get("/{environment_id}", response_model=list[VariableRes])
 async def get_variables(
     environment_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],

@@ -1,3 +1,5 @@
+import base64
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,11 +19,27 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY: int = 60
 
+    ENCRYPTION_KEY: str
+    ENCRYPTION_KEY_VERSION: int = 1
+
     @field_validator("JWT_SECRET")
     @classmethod
     def validate_jwt_secret(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("JWT_SECRET must not be empty")
+        return value
+
+    @field_validator("ENCRYPTION_KEY")
+    @classmethod
+    def validate_encryption_key(cls, value: str) -> str:
+        try:
+            key = base64.b64decode(value, validate=True)
+        except Exception as e:
+            raise ValueError("ENCRYPTION_KEY must be valid base64") from e
+
+        if len(key) != 32:
+            raise ValueError("ENCRYPTION_KEY must decode to 32 bytes")
+
         return value
 
 

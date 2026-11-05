@@ -4,7 +4,13 @@ from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import EnvironmentNotFound
 from app.api.v1.variable.exceptions import CreateVariableError, VariableAlreadyExists
 from app.api.v1.variable.models import VariableModel
-from app.api.v1.variable.schemas import CreateVariableReq, CreateVariableRes
+from app.api.v1.variable.schemas import (
+    CreateVariableReq,
+    CreateVariableRes,
+    VariableRes,
+)
+from app.core.config import settings
+from app.core.crypto import decrypt_value, encrypt_value
 from app.core.logger import get_logger
 from app.core.utils import get_current_time
 from app.db.mongodb import mongo
@@ -42,7 +48,7 @@ class Variable:
     async def create_variable(
         self, user_id: str, environment_id: str, payload: CreateVariableReq
     ) -> CreateVariableRes:
-        log.info(f"creating variable {environment_id} {payload}")
+        log.info(f"creating variable {environment_id}")
 
         if self.db.environments is None or self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
@@ -59,7 +65,8 @@ class Variable:
 
         variable_payload = VariableModel(
             name=payload.name,
-            value=payload.value,
+            value_enc=encrypt_value(payload.value, environment_id, payload.name),
+            key_version=settings.ENCRYPTION_KEY_VERSION,
             environment_id=environment_id,
             created_at=now,
             updated_at=now,
@@ -76,7 +83,7 @@ class Variable:
 
     async def get_variables(
         self, user_id: str, environment_id: str
-    ) -> list[VariableModel]:
+    ) -> list[VariableRes]:
         log.info(f"fetching variables {environment_id}")
 
         if self.db.environments is None or self.db.variables is None:
@@ -88,4 +95,21 @@ class Variable:
             {"environment_id": environment_id}
         ).to_list(length=None)
 
-        return [VariableModel.model_validate(variable) for variable in variables]
+        res = []
+
+        for variable in variables:
+            model = VariableModel.model_validate(variable)
+            res.append(
+                VariableRes(
+                    id=str(model.id),
+                    name=model.name,
+                    value=decrypt_value(
+                        model.value_enc, model.environment_id, model.name
+                    ),
+                    environment_id=model.environment_id,
+                    created_at=model.created_at,
+                    updated_at=model.updated_at,
+                )
+            )
+
+        return res

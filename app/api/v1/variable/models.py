@@ -12,7 +12,8 @@ class VariableModel(BaseModel):
 
     id: ObjectId | None = Field(default=None, alias="_id")
     name: str
-    value: str | int
+    value_enc: str
+    key_version: int
     environment_id: str
     created_at: datetime
     updated_at: datetime
