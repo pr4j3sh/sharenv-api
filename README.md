@@ -1,15 +1,22 @@
 # sharenv-api
 
-sharenv API server code for managing projects environment variables
-and sharing them.
+A self-hosted API server for securely managing, syncing, and sharing project environment variables. Provides centralized storage and access management for environment configurations.
+
+Use [`pr4j3sh/sharenv`](https://github.com/pr4j3sh/sharenv) `CLI` client along with this.
 
 ## Requirements
 
-- Python 3.15+
+- [Python 3.15+](https://www.python.org/downloads/)
 - [uv](https://docs.astral.sh/uv/)
-- MongoDB instance
+- [MongoDB](https://www.mongodb.com/) (Optional)
 
-## Installation
+## Self-hosting
+
+### Using Docker
+
+Follow instructions at [docs/self-hosting.md](docs/self-hosting.md).
+
+### Using Source
 
 - clone repository
 
@@ -32,37 +39,16 @@ openssl rand -hex 32     # JWT_SECRET
 openssl rand -base64 32  # ENCRYPTION_KEY
 ```
 
-Paste the generated values into `JWT_SECRET` and `ENCRYPTION_KEY` in `.env`.
+> Paste the generated values into `JWT_SECRET` and `ENCRYPTION_KEY` in `.env`. Also add `MONGO_URI`.
 
-`ENCRYPTION_KEY` encrypts variable values at rest with AES-256-GCM. Back it up separately — losing it means losing all stored values.
-
-## Usage
-
-Run from the repository root so `.env` is loaded from the current working directory:
+- Run from the repository root so `.env` is loaded from the current working directory:
 
 ```bash
 uv run fastapi dev
 ```
 
-The server starts on `http://127.0.0.1:8000`.
+> The server starts on `http://127.0.0.1:8000`. Browse API docs at <http://127.0.0.1:8000/docs>
 
-- Interactive docs: <http://127.0.0.1:8000/docs>
-- Health check: `GET /health` → `{"status": "ok"}`
+## Next Steps
 
-The API refuses to start if MongoDB is unreachable.
-
-## Production
-
-The dev server speaks plain HTTP. Always run the API behind TLS in production — use a Caddy/Nginx reverse proxy, or Uvicorn with `--ssl-certfile` and `--ssl-keyfile` — and point the CLI at an `https://` base URL so tokens and variable values are encrypted in transit. Variable responses send `Cache-Control: no-store`.
-
-## Self-hosting
-
-A Docker Compose deployment with nginx, HTTP/HTTPS support, and bundled or external MongoDB is documented in [docs/self-hosting.md](docs/self-hosting.md).
-
-Quick start:
-
-```bash
-cp .env.docker.example .env.docker
-# set JWT_SECRET and ENCRYPTION_KEY in .env.docker
-docker compose up -d --build
-```
+- [Install sharenv CLI](https://github.com/pr4j3sh/sharenv)
