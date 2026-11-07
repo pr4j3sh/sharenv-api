@@ -12,7 +12,11 @@ class CreateVariableRes(BaseModel):
     variable_id: str
 
 
-class VariableRes(BaseModel):
+class DeleteVariableRes(BaseModel):
+    variable_id: str
+
+
+class GetVariablesRes(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(alias="_id")
@@ -21,3 +25,11 @@ class VariableRes(BaseModel):
     environment_id: str
     created_at: datetime
     updated_at: datetime
+
+
+class UpdateVariableReq(BaseModel):
+    value: str
+
+
+class UpdateVariableRes(BaseModel):
+    variable_id: str

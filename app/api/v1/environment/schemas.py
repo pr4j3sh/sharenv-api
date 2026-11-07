@@ -18,3 +18,7 @@ class CreateEnvironmentReq(BaseModel):
 
 class CreateEnvironmentRes(BaseModel):
     environment_id: str
+
+
+class DeleteEnvironmentRes(BaseModel):
+    environment_id: str

@@ -8,3 +8,7 @@ class CreateEnvironmentError(Exception):
 
 class EnvironmentNotFound(Exception):
     pass
+
+
+class DeleteEnvironmentFailed(Exception):
+    pass

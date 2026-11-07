@@ -3,11 +3,18 @@ from bson.objectid import ObjectId
 from app.api.v1.auth.exceptions import UnauthorizedAccess, UserNotFound
 from app.api.v1.environment.exceptions import (
     CreateEnvironmentError,
+    DeleteEnvironmentFailed,
     EnvironmentAlreadyExists,
+    EnvironmentNotFound,
 )
 from app.api.v1.environment.models import EnvironmentModel
-from app.api.v1.environment.schemas import CreateEnvironmentReq, CreateEnvironmentRes
+from app.api.v1.environment.schemas import (
+    CreateEnvironmentReq,
+    CreateEnvironmentRes,
+    DeleteEnvironmentRes,
+)
 from app.api.v1.project.exceptions import ProjectNotFound
+from app.api.v1.variable.exceptions import DeleteVariableFailed
 from app.core.logger import get_logger
 from app.core.utils import get_current_time
 from app.db.mongodb import mongo
@@ -117,3 +124,85 @@ class Environment:
         return [
             EnvironmentModel.model_validate(environment) for environment in environments
         ]
+
+    async def delete_environment(self, user_id: str, environment_id: str):
+        log.info(f"deleting environment {environment_id}")
+
+        if (
+            self.db.environments is None
+            or self.db.projects is None
+            or self.db.variables is None
+        ):
+            raise RuntimeError("mongodb is not connected")
+
+        environment = await self.db.environments.find_one(
+            {"_id": ObjectId(environment_id)}
+        )
+
+        if not environment:
+            raise EnvironmentNotFound("environment does not exist")
+
+        project = await self.db.projects.find_one(
+            {
+                "_id": ObjectId(environment["project_id"]),
+                "$or": [{"user_id": user_id}, {"users": user_id}],
+            }
+        )
+        if not project:
+            raise UnauthorizedAccess("Unauthorized Access")
+
+        res = await self.db.variables.delete_many({"environment_id": environment_id})
+        if not res.acknowledged:
+            raise DeleteVariableFailed(
+                "Failed to delete variables for this envrionment"
+            )
+
+        res = await self.db.environments.delete_one({"_id": ObjectId(environment_id)})
+
+        if not res.acknowledged:
+            raise DeleteEnvironmentFailed("Failed to delete environment")
+
+        return DeleteEnvironmentRes(environment_id=environment_id)
+
+    async def delete_environment_by_name(
+        self, user_id: str, project_id: str, environment_name: str
+    ):
+        log.info(f"deleting environment {project_id} {environment_name}")
+
+        if (
+            self.db.environments is None
+            or self.db.projects is None
+            or self.db.variables is None
+        ):
+            raise RuntimeError("mongodb is not connected")
+
+        environment = await self.db.environments.find_one(
+            {"project_id": project_id, "name": environment_name}
+        )
+
+        if not environment:
+            raise EnvironmentNotFound("environment does not exist")
+
+        project = await self.db.projects.find_one(
+            {
+                "_id": ObjectId(environment["project_id"]),
+                "$or": [{"user_id": user_id}, {"users": user_id}],
+            }
+        )
+        if not project:
+            raise UnauthorizedAccess("Unauthorized Access")
+
+        res = await self.db.variables.delete_many(
+            {"environment_id": str(environment["_id"])}
+        )
+        if not res.acknowledged:
+            raise DeleteVariableFailed(
+                "Failed to delete variables for this envrionment"
+            )
+
+        res = await self.db.environments.delete_one({"_id": environment["_id"]})
+
+        if not res.acknowledged:
+            raise DeleteEnvironmentFailed("Failed to delete environment")
+
+        return DeleteEnvironmentRes(environment_id=str(environment["_id"]))

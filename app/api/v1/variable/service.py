@@ -2,12 +2,21 @@ from bson.objectid import ObjectId
 
 from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import EnvironmentNotFound
-from app.api.v1.variable.exceptions import CreateVariableError, VariableAlreadyExists
+from app.api.v1.variable.exceptions import (
+    CreateVariableError,
+    DeleteVariableFailed,
+    UpdateVariableFailed,
+    VariableAlreadyExists,
+    VariableNotFound,
+)
 from app.api.v1.variable.models import VariableModel
 from app.api.v1.variable.schemas import (
     CreateVariableReq,
     CreateVariableRes,
-    VariableRes,
+    DeleteVariableRes,
+    GetVariablesRes,
+    UpdateVariableReq,
+    UpdateVariableRes,
 )
 from app.core.config import settings
 from app.core.crypto import decrypt_value, encrypt_value
@@ -44,6 +53,35 @@ class Variable:
             raise UnauthorizedAccess("Unauthorized Access")
 
         return environment
+
+    async def _get_variable_for_user(self, user_id: str, variable_id: str) -> dict:
+        if (
+            self.db.environments is None
+            or self.db.projects is None
+            or self.db.variables is None
+        ):
+            raise RuntimeError("mongodb is not connected")
+
+        variable = await self.db.variables.find_one({"_id": ObjectId(variable_id)})
+        if not variable:
+            raise VariableNotFound("Variable does not exist")
+
+        environment = await self.db.environments.find_one(
+            {"_id": ObjectId(variable["environment_id"])}
+        )
+        if not environment:
+            raise EnvironmentNotFound("Environment does not exist")
+
+        project = await self.db.projects.find_one(
+            {
+                "_id": ObjectId(environment["project_id"]),
+                "$or": [{"user_id": user_id}, {"users": user_id}],
+            }
+        )
+        if not project:
+            raise UnauthorizedAccess("Unauthorized Access")
+
+        return variable
 
     async def create_variable(
         self, user_id: str, environment_id: str, payload: CreateVariableReq
@@ -83,7 +121,7 @@ class Variable:
 
     async def get_variables(
         self, user_id: str, environment_id: str
-    ) -> list[VariableRes]:
+    ) -> list[GetVariablesRes]:
         log.info(f"fetching variables {environment_id}")
 
         if self.db.environments is None or self.db.variables is None:
@@ -100,8 +138,8 @@ class Variable:
         for variable in variables:
             model = VariableModel.model_validate(variable)
             res.append(
-                VariableRes(
-                    id=str(model.id),
+                GetVariablesRes(
+                    _id=str(model.id),
                     name=model.name,
                     value=decrypt_value(
                         model.value_enc, model.environment_id, model.name
@@ -113,3 +151,97 @@ class Variable:
             )
 
         return res
+
+    async def delete_variable(self, user_id, variable_id) -> DeleteVariableRes:
+        log.info(f"deleting variable {variable_id}")
+
+        if self.db.variables is None:
+            raise RuntimeError("mongodb is not connected")
+
+        variable = await self._get_variable_for_user(user_id, variable_id)
+
+        res = await self.db.variables.delete_one({"_id": variable["_id"]})
+
+        if not res.acknowledged:
+            raise DeleteVariableFailed("Failed to delete variable")
+
+        return DeleteVariableRes(variable_id=variable_id)
+
+    async def delete_variable_by_name(
+        self, user_id: str, environment_id: str, variable_name: str
+    ) -> DeleteVariableRes:
+        log.info(f"deleting variable {environment_id} {variable_name}")
+
+        if self.db.variables is None:
+            raise RuntimeError("mongodb is not connected")
+
+        await self._get_environment_for_user(user_id, environment_id)
+
+        res = await self.db.variables.find_one_and_delete(
+            {"name": variable_name, "environment_id": environment_id}
+        )
+
+        if res is None:
+            raise VariableNotFound("variable not found")
+
+        return DeleteVariableRes(variable_id=str(res["_id"]))
+
+    async def update_variable(
+        self, user_id, variable_id, payload: UpdateVariableReq
+    ) -> UpdateVariableRes:
+        log.info(f"updating variable {variable_id}")
+
+        if self.db.variables is None:
+            raise RuntimeError("mongodb is not connected")
+
+        variable = await self._get_variable_for_user(user_id, variable_id)
+
+        now = get_current_time()
+        res = await self.db.variables.update_one(
+            {"_id": variable["_id"]},
+            {
+                "$set": {
+                    "value_enc": encrypt_value(
+                        payload.value, variable["environment_id"], variable["name"]
+                    )
+                },
+                "updated_at": now,
+            },
+        )
+
+        if not res.acknowledged:
+            raise UpdateVariableFailed("Failed to update variable")
+
+        return UpdateVariableRes(variable_id=variable_id)
+
+    async def update_variable_by_name(
+        self,
+        user_id: str,
+        environment_id: str,
+        variable_name: str,
+        payload: UpdateVariableReq,
+    ) -> UpdateVariableRes:
+        log.info(f"updating variable {environment_id} {variable_name}")
+
+        if self.db.variables is None:
+            raise RuntimeError("mongodb is not connected")
+
+        await self._get_environment_for_user(user_id, environment_id)
+
+        now = get_current_time()
+        res = await self.db.variables.find_one_and_update(
+            {"name": variable_name, "environment_id": environment_id},
+            {
+                "$set": {
+                    "value_enc": encrypt_value(
+                        payload.value, environment_id, variable_name
+                    )
+                },
+                "updated_at": now,
+            },
+        )
+
+        if res is None:
+            raise VariableNotFound("variable not found")
+
+        return UpdateVariableRes(variable_id=str(res["_id"]))
