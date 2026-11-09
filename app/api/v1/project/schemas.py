@@ -26,3 +26,7 @@ class AddUserReq(BaseModel):
 
 class AddUserRes(BaseModel):
     project_id: str
+
+
+class DeleteProjectRes(BaseModel):
+    project_id: str

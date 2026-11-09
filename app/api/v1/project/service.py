@@ -1,6 +1,7 @@
 from bson.objectid import ObjectId
 
 from app.api.v1.auth.exceptions import UserNotFound
+from app.api.v1.environment.exceptions import EnvironmentNotFound
 from app.api.v1.project.exceptions import (
     CannotAddSameUser,
     CreateProjectError,
@@ -13,6 +14,7 @@ from app.api.v1.project.schemas import (
     AddUserRes,
     CreateProjectReq,
     CreateProjectRes,
+    DeleteProjectRes,
 )
 from app.core.logger import get_logger
 from app.core.utils import get_current_time
@@ -122,3 +124,82 @@ class Project:
         projects = await self.db.projects.find(query).to_list(length=None)
 
         return [ProjectModel.model_validate(project) for project in projects]
+
+    async def delete_project(self, user_id: str, project_id: str) -> DeleteProjectRes:
+        log.info(f"deleting project {project_id}")
+
+        if (
+            self.db.projects is None
+            or self.db.users is None
+            or self.db.environments is None
+            or self.db.variables is None
+        ):
+            raise RuntimeError("mongodb is not connected")
+
+        user_exists = await self.db.users.find_one({"_id": ObjectId(user_id)})
+
+        if not user_exists:
+            raise UserNotFound("User does not exist")
+
+        project = await self.db.projects.find_one(
+            {"_id": ObjectId(project_id), "user_id": user_id}
+        )
+        if not project:
+            raise ProjectNotFound("project does not exist")
+
+        environments = await self.db.environments.find(
+            {"project_id": project_id}
+        ).to_list(length=None)
+
+        environment_ids = [str(environment["_id"]) for environment in environments]
+
+        for environment_id in environment_ids:
+            await self.db.variables.delete_many({"environment_id": environment_id})
+
+        await self.db.environments.delete_many({"project_id": project_id})
+
+        await self.db.projects.delete_one(
+            {"_id": ObjectId(project_id), "user_id": user_id}
+        )
+
+        return DeleteProjectRes(project_id=project_id)
+
+    async def delete_project_by_name(
+        self, user_id: str, project_name: str
+    ) -> DeleteProjectRes:
+        log.info(f"deleting project {project_name}")
+
+        if (
+            self.db.projects is None
+            or self.db.users is None
+            or self.db.environments is None
+            or self.db.variables is None
+        ):
+            raise RuntimeError("mongodb is not connected")
+
+        user_exists = await self.db.users.find_one({"_id": ObjectId(user_id)})
+
+        if not user_exists:
+            raise UserNotFound("User does not exist")
+
+        project = await self.db.projects.find_one(
+            {"name": project_name, "user_id": user_id}
+        )
+
+        if not project:
+            raise ProjectNotFound("project does not exist")
+
+        environments = await self.db.environments.find(
+            {"project_id": str(project["_id"])}
+        ).to_list(length=None)
+
+        environment_ids = [str(environment["_id"]) for environment in environments]
+
+        for environment_id in environment_ids:
+            await self.db.variables.delete_many({"environment_id": environment_id})
+
+        await self.db.environments.delete_many({"project_id": str(project["_id"])})
+
+        await self.db.projects.delete_one({"_id": project["_id"], "user_id": user_id})
+
+        return DeleteProjectRes(project_id=str(project["_id"]))

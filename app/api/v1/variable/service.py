@@ -203,9 +203,9 @@ class Variable:
                 "$set": {
                     "value_enc": encrypt_value(
                         payload.value, variable["environment_id"], variable["name"]
-                    )
+                    ),
+                    "updated_at": now.isoformat(),
                 },
-                "updated_at": now,
             },
         )
 
@@ -235,9 +235,9 @@ class Variable:
                 "$set": {
                     "value_enc": encrypt_value(
                         payload.value, environment_id, variable_name
-                    )
+                    ),
+                    "updated_at": now,
                 },
-                "updated_at": now,
             },
         )
 

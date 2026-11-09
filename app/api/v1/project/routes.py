@@ -14,6 +14,7 @@ from app.api.v1.project.schemas import (
     AddUserRes,
     CreateProjectReq,
     CreateProjectRes,
+    DeleteProjectRes,
 )
 from app.api.v1.project.service import Project
 from app.core.dependencies import get_current_user_id
@@ -100,6 +101,60 @@ async def add_user(
         ) from e
     except Exception as e:
         log.exception("adding user to project failed unexpectedly")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal Server Error",
+        ) from e
+
+
+@router.delete("/{project_id}", response_model=DeleteProjectRes)
+async def delete_project(
+    project_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    try:
+        p = Project()
+        res = await p.delete_project(user_id, project_id)
+        return res
+    except UserNotFound as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e),
+        ) from e
+    except ProjectNotFound as e:
+        raise HTTPException(
+            status_code=409,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        log.exception("deleting project failed unexpectedly")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal Server Error",
+        ) from e
+
+
+@router.delete("/name/{project_name}", response_model=DeleteProjectRes)
+async def delete_project_by_name(
+    project_name: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    try:
+        p = Project()
+        res = await p.delete_project_by_name(user_id, project_name)
+        return res
+    except UserNotFound as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e),
+        ) from e
+    except ProjectNotFound as e:
+        raise HTTPException(
+            status_code=409,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        log.exception("deleting project failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",
