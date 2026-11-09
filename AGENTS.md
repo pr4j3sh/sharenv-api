@@ -31,6 +31,7 @@ FastAPI + async MongoDB (PyMongo `AsyncMongoClient`) API for managing projects, 
 - JWTs use `sub` as the user id; `JWT_EXPIRY` is in minutes. Emails are trimmed and lowercased on register and login.
 - Project and environment `name` values must match `[a-z0-9_-]+`.
 - Misspellings are load-bearing: `create_environemnt` (service and route) and `delete_environemnt` (route). Keep call sites consistent if renaming.
+- Security-sensitive changes must satisfy `docs/security-review.md`; the trust model and data classification are in `docs/security.md`. Values are decrypted server-side, so never claim end-to-end encryption.
 
 ## Deployment
 

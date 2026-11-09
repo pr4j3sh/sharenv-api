@@ -15,19 +15,21 @@ finish it.
 
 Decide and document what the server is allowed to see before changing crypto.
 
-- [ ] **P0 — Write the threat model.** Add `docs/security.md` covering: what the
+- [x] **P0 — Write the threat model.** Add `docs/security.md` covering: what the
       server can read, what a DB-only attacker gets, what a stolen token gets,
       what a malicious project member gets, and what a compromised host gets.
       Acceptance: the doc explicitly states that values are decrypted server-side.
-- [ ] **P0 — Decide server-side vs end-to-end encryption.** If the server must
+      (`docs/security.md`)
+- [x] **P0 — Decide server-side vs end-to-end encryption.** If the server must
       never see plaintext, move encryption into the CLI (per-project key) and
       make the API store opaque blobs. If server-side stays, state that server
-      compromise = all secrets.
-- [ ] **P1 — Define data classification.** Values are secret; names/metadata are
+      compromise = all secrets. (`docs/security.md` — server-side, documented)
+- [x] **P1 — Define data classification.** Values are secret; names/metadata are
       currently plaintext. Decide whether variable names and project names are
-      also sensitive, and document it.
-- [ ] **P1 — Add a security review checklist** for future routes: auth required,
+      also sensitive, and document it. (`docs/security.md` — sensitive metadata)
+- [x] **P1 — Add a security review checklist** for future routes: auth required,
       membership checked, input validated, response filtered, no secrets logged.
+      (`docs/security-review.md`)
 
 ---
 

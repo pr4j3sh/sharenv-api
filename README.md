@@ -49,6 +49,16 @@ uv run fastapi dev
 
 > The server starts on `http://127.0.0.1:8000`. Browse API docs at <http://127.0.0.1:8000/docs>
 
+## Security
+
+Values are encrypted server-side, not end-to-end: the API decrypts them before
+returning them, so a compromised server or operator can read every value. Read
+the trust model and data classification in [docs/security.md](docs/security.md)
+before storing real production secrets.
+
+New routes and services must pass
+[docs/security-review.md](docs/security-review.md).
+
 ## Next Steps
 
 - [Install sharenv CLI](https://github.com/pr4j3sh/sharenv)
