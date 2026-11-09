@@ -80,7 +80,7 @@ Current code: `app/api/v1/auth/*`, `app/core/security.py`,
       user and send a verification token; login/secret access must be blocked
       until verified. Acceptance: an attacker cannot register a victim's email
       and receive a usable token.
-- [ ] **P0 — Add a password policy.** Minimum length (>= 12), maximum length
+- [x] **P0 — Add a password policy.** Minimum length (>= 12), maximum length
       (e.g. 1024 bytes) to avoid Argon2 DoS, and reject obvious weak/breached
       passwords. Validate in `RegisterReq`/`LoginReq` (`auth/schemas.py`).
 - [ ] **P0 — Add rate limiting and lockout.** Per-IP and per-email limits on
@@ -93,11 +93,11 @@ Current code: `app/api/v1/auth/*`, `app/core/security.py`,
       timing for unknown email and wrong password (`auth/routes.py:48-74`,
       `auth/service.py:48-66`). Use a dummy hash when the user is missing.
       Remove the `404 UserNotFound` path. Also fix `add_user` returning `401
-    UserNotFound` for an unknown email (`project/routes.py:82-107`).
-- [ ] **P0 — Enforce a strong `JWT_SECRET`.** Reject secrets shorter than 32
+UserNotFound` for an unknown email (`project/routes.py:82-107`).
+- [x] **P0 — Enforce a strong `JWT_SECRET`.** Reject secrets shorter than 32
       bytes / low entropy in `Settings.validate_jwt_secret`
       (`core/config.py:25-30`). Acceptance: startup fails for `secret`.
-- [ ] **P0 — Allowlist the JWT algorithm.** Reject anything except
+- [x] **P0 — Allowlist the JWT algorithm.** Reject anything except
       `HS256/HS384/HS512` in config validation; never allow `none`.
 - [ ] **P0 — Add token revocation/logout.** Add `jti` to tokens and a
       revocation list (or per-user `token_version`) checked in
@@ -131,8 +131,8 @@ Current code: `app/api/v1/project/*`, `app/api/v1/environment/*`,
       the project (`users` becomes `members: [{user_id, role}]`). Readers must
       not update/delete variables or delete environments.
 - [ ] **P0 — Add member removal and "leave project".** `DELETE
-    /project/{id}/members/{user_id}` (owner only) and `DELETE
-    /project/{id}/members/me`. Acceptance: revoked users lose access
+/project/{id}/members/{user_id}` (owner only) and `DELETE
+/project/{id}/members/me`. Acceptance: revoked users lose access
       immediately; combine with token version/revocation if needed.
 - [ ] **P0 — Scope permissions per environment.** Decide whether prod is
       owner-only or role-gated. Enforce in `_get_environment_for_user` and the

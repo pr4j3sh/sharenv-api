@@ -38,5 +38,9 @@ class UserAlreadyVerified(Exception):
     pass
 
 
+class UserNotVerified(Exception):
+    pass
+
+
 class ResendOtpError(Exception):
     pass

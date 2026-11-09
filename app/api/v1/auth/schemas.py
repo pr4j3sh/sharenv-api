@@ -1,9 +1,25 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
+
+from app.core.config import settings
+from app.core.utils import validate_password_size
 
 
 class RegisterReq(BaseModel):
     email: EmailStr
     password: str
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        validate_password_size(value)
+
+        if len(value) < settings.MIN_PASSWORD_LENGTH:
+            raise ValueError("Password must be at least 12 characters long")
+
+        if value.strip().lower() in settings.WEAK_PASSWORDS:
+            raise ValueError("Password is too weak")
+
+        return value
 
 
 class RegisterRes(BaseModel):
@@ -21,8 +37,13 @@ class VerifyUserRes(BaseModel):
 
 
 class LoginReq(BaseModel):
-    email: str
+    email: EmailStr
     password: str
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_password_size(value)
 
 
 class LoginRes(BaseModel):

@@ -11,6 +11,7 @@ from app.api.v1.auth.exceptions import (
     UserAlreadyExists,
     UserAlreadyVerified,
     UserNotFound,
+    UserNotVerified,
     VerifyOtpError,
 )
 from app.api.v1.auth.models import UserModel
@@ -152,6 +153,9 @@ class Auth:
         user = await self.db.users.find_one({"email": payload.email.strip().lower()})
         if not user:
             raise UserNotFound("User not found")
+
+        if not user["is_verified"]:
+            raise UserNotVerified("User is unverified")
 
         if not verify_password(payload.password, user.get("password")):
             raise InvalidCredentials("invalid credentials")

@@ -1,4 +1,5 @@
 import base64
+from typing import Literal
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,7 +17,7 @@ class Settings(BaseSettings):
     DATABASE: str = "sharenv_test"
 
     JWT_SECRET: str = ""
-    JWT_ALGORITHM: str = "HS256"
+    JWT_ALGORITHM: Literal["HS256", "HS384", "HS512"] = "HS256"
     JWT_EXPIRY: int = 60
 
     ENCRYPTION_KEY: str = ""
@@ -31,11 +32,34 @@ class Settings(BaseSettings):
     OTP_EXPIRY: int = 1
     OTP_LENGTH: int = 6
 
+    MIN_PASSWORD_LENGTH: int = 12
+    MAX_PASSWORD_BYTES: int = 1024
+    WEAK_PASSWORDS: set[str] = {
+        "password123",
+        "password1234",
+        "qwerty123456",
+        "123456789012",
+        "admin123456",
+        "letmein12345",
+    }
+
     @field_validator("JWT_SECRET")
     @classmethod
     def validate_jwt_secret(cls, value: str) -> str:
-        if not value.strip():
+        secret = value.strip()
+
+        if not secret:
             raise ValueError("JWT_SECRET must not be empty")
+
+        if len(secret.encode("utf-8")) < 32:
+            raise ValueError("JWT_SECRET must be at least 32 bytes")
+
+        if secret.lower() in {"secret", "password", "changeme"}:
+            raise ValueError("JWT_SECRET is too weak")
+
+        if len(set(secret)) < 8:
+            raise ValueError("JWT_SECRET has insufficient character diversity")
+
         return value
 
     @field_validator("RESEND_API_KEY")
