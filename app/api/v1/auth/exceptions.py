@@ -20,3 +20,23 @@ class CreateTokenError(Exception):
 
 class UnauthorizedAccess(Exception):
     pass
+
+
+class SendEmailError(Exception):
+    pass
+
+
+class VerifyOtpError(Exception):
+    pass
+
+
+class OtpExpired(Exception):
+    pass
+
+
+class UserAlreadyVerified(Exception):
+    pass
+
+
+class ResendOtpError(Exception):
+    pass

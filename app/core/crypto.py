@@ -2,10 +2,16 @@ import base64
 import json
 import os
 import secrets
+import string
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from app.core.config import settings
+
+
+def generate_otp() -> str:
+    length = settings.OTP_LENGTH
+    return "".join(secrets.choice(string.digits) for _ in range(length))
 
 
 def get_master_key() -> bytes:

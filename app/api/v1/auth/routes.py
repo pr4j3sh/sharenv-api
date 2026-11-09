@@ -6,8 +6,16 @@ from app.api.v1.auth.exceptions import (
     RegisterError,
     UserAlreadyExists,
     UserNotFound,
+    VerifyOtpError,
 )
-from app.api.v1.auth.schemas import LoginReq, LoginRes, RegisterReq, RegisterRes
+from app.api.v1.auth.schemas import (
+    LoginReq,
+    LoginRes,
+    RegisterReq,
+    RegisterRes,
+    ResendOtpRes,
+    VerifyUserRes,
+)
 from app.api.v1.auth.service import Auth
 from app.core.logger import get_logger
 
@@ -68,6 +76,64 @@ async def login(req: LoginReq):
         ) from e
     except Exception as e:
         log.exception("login failed unexpectedly")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal Server Error",
+        ) from e
+
+
+@router.post("/verify/{user_id}/{otp}", response_model=VerifyUserRes)
+async def verify_user(user_id: str, otp: str):
+    try:
+        a = Auth()
+        res = await a.verify_user(user_id, otp)
+        return res
+    except UserNotFound as e:
+        raise HTTPException(
+            status_code=404,
+            detail=str(e),
+        ) from e
+    except VerifyOtpError as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e),
+        ) from e
+    except CreateTokenError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        log.exception("user verification failed unexpectedly")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal Server Error",
+        ) from e
+
+
+@router.post("/resend/{user_id}", response_model=ResendOtpRes)
+async def resend_otp(user_id: str):
+    try:
+        a = Auth()
+        res = await a.resent_otp(user_id)
+        return res
+    except UserNotFound as e:
+        raise HTTPException(
+            status_code=404,
+            detail=str(e),
+        ) from e
+    except VerifyOtpError as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e),
+        ) from e
+    except CreateTokenError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        log.exception("otp resend failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",

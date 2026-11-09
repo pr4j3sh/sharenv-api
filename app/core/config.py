@@ -25,11 +25,24 @@ class Settings(BaseSettings):
     TOKEN_BYTES: int = 32
     KEY_INFO: str = "sharenv:project-key:v1"
 
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM: str = "Acme <onboarding@resend.dev>"
+
+    OTP_EXPIRY: int = 1
+    OTP_LENGTH: int = 6
+
     @field_validator("JWT_SECRET")
     @classmethod
     def validate_jwt_secret(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("JWT_SECRET must not be empty")
+        return value
+
+    @field_validator("RESEND_API_KEY")
+    @classmethod
+    def validate_resend_api_key(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("RESEND_API_KEY must not be empty")
         return value
 
     @field_validator("ENCRYPTION_KEY")

@@ -38,7 +38,7 @@ Decide and document what the server is allowed to see before changing crypto.
 Current code: `app/core/crypto.py`, `app/api/v1/variable/service.py`,
 `app/api/v1/variable/models.py`, `app/core/config.py`.
 
-- [ ] **P0 — Add per-project (or per-tenant) data keys.** Generate a random
+- [x] **P0 — Add per-project (or per-tenant) data keys.** Generate a random
       32-byte data key per project, encrypt it with a master key, store the
       wrapped key on the project document. Encrypt variable values with the
       project data key. Acceptance: a leaked single project key cannot decrypt
@@ -58,7 +58,7 @@ Current code: `app/core/crypto.py`, `app/api/v1/variable/service.py`,
 - [ ] **P0 — Store the master key outside the repo/host config.** Use Docker
       secrets or an external KMS. Do not put `ENCRYPTION_KEY` in `.env` next to
       `MONGO_URI`. Acceptance: `docker inspect` does not expose the key.
-- [ ] **P1 — Add per-variable error isolation.** `get_variables` should skip or
+- [x] **P1 — Add per-variable error isolation.** `get_variables` should skip or
       report a single undecryptable variable instead of failing the whole
       environment (`variable/service.py:138-151`). Return a structured error or
       an `undecryptable` flag.
@@ -76,7 +76,7 @@ Current code: `app/core/crypto.py`, `app/api/v1/variable/service.py`,
 Current code: `app/api/v1/auth/*`, `app/core/security.py`,
 `app/core/dependencies.py`, `app/core/config.py`.
 
-- [ ] **P0 — Add email verification.** Registration should create an unverified
+- [x] **P0 — Add email verification.** Registration should create an unverified
       user and send a verification token; login/secret access must be blocked
       until verified. Acceptance: an attacker cannot register a victim's email
       and receive a usable token.
@@ -93,7 +93,7 @@ Current code: `app/api/v1/auth/*`, `app/core/security.py`,
       timing for unknown email and wrong password (`auth/routes.py:48-74`,
       `auth/service.py:48-66`). Use a dummy hash when the user is missing.
       Remove the `404 UserNotFound` path. Also fix `add_user` returning `401
-      UserNotFound` for an unknown email (`project/routes.py:82-107`).
+    UserNotFound` for an unknown email (`project/routes.py:82-107`).
 - [ ] **P0 — Enforce a strong `JWT_SECRET`.** Reject secrets shorter than 32
       bytes / low entropy in `Settings.validate_jwt_secret`
       (`core/config.py:25-30`). Acceptance: startup fails for `secret`.
@@ -131,8 +131,8 @@ Current code: `app/api/v1/project/*`, `app/api/v1/environment/*`,
       the project (`users` becomes `members: [{user_id, role}]`). Readers must
       not update/delete variables or delete environments.
 - [ ] **P0 — Add member removal and "leave project".** `DELETE
-      /project/{id}/members/{user_id}` (owner only) and `DELETE
-      /project/{id}/members/me`. Acceptance: revoked users lose access
+    /project/{id}/members/{user_id}` (owner only) and `DELETE
+    /project/{id}/members/me`. Acceptance: revoked users lose access
       immediately; combine with token version/revocation if needed.
 - [ ] **P0 — Scope permissions per environment.** Decide whether prod is
       owner-only or role-gated. Enforce in `_get_environment_for_user` and the
