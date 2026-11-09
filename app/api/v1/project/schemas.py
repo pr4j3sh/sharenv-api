@@ -1,6 +1,7 @@
 import re
+from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_serializer, field_validator
 
 
 class CreateProjectReq(BaseModel):
@@ -21,7 +22,7 @@ class CreateProjectRes(BaseModel):
 
 
 class AddUserReq(BaseModel):
-    email: str
+    email: EmailStr
 
 
 class AddUserRes(BaseModel):
@@ -30,3 +31,15 @@ class AddUserRes(BaseModel):
 
 class DeleteProjectRes(BaseModel):
     project_id: str
+
+
+class GetProjectsRes(BaseModel):
+    id: str = Field(alias="_id")
+    name: str
+    user_id: str
+    created_at: datetime
+    updated_at: datetime
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_datetime(self, value: datetime) -> str:
+        return value.isoformat()

@@ -14,6 +14,7 @@ from app.api.v1.project.schemas import (
     CreateProjectReq,
     CreateProjectRes,
     DeleteProjectRes,
+    GetProjectsRes,
 )
 from app.core.crypto import get_data_key, wrap_data_key
 from app.core.logger import get_logger
@@ -111,7 +112,7 @@ class Project:
 
     async def get_projects(
         self, user_id: str, project_name: str | None = None
-    ) -> list[ProjectModel]:
+    ) -> list[GetProjectsRes]:
         log.info(f"fetching projects {user_id}")
 
         if self.db.projects is None or self.db.users is None:
@@ -131,7 +132,7 @@ class Project:
 
         projects = await self.db.projects.find(query).to_list(length=None)
 
-        return [ProjectModel.model_validate(project) for project in projects]
+        return [GetProjectsRes.model_validate(project) for project in projects]
 
     async def delete_project(self, user_id: str, project_id: str) -> DeleteProjectRes:
         log.info(f"deleting project {project_id}")
