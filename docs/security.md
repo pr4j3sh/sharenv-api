@@ -52,12 +52,12 @@ There is no key material in the CLI. All key material is held by the server.
 
 ## Data classification
 
-| Class | Examples | At rest | Who can read it |
-| --- | --- | --- | --- |
-| **Secret** | Variable values | AES-256-GCM ciphertext (`value_enc`) | Any member of the project, the API process, the operator, host root |
-| **Sensitive metadata** | Variable names, environment names, project names, member user IDs, account emails | Plaintext | The same parties as secrets, plus anyone with database access |
-| **Credentials** | Password hashes, `JWT_SECRET`, `ENCRYPTION_KEY` | Password hashes in `users`; keys outside the database (`.env`/container environment today) | The API process and host root; never returned by the API |
-| **Operational** | ObjectIds, timestamps, `key_version`, record sizes | Plaintext | Anyone with database access |
+| Class                  | Examples                                                                          | At rest                                                                                    | Who can read it                                                     |
+| ---------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| **Secret**             | Variable values                                                                   | AES-256-GCM ciphertext (`value_enc`)                                                       | Any member of the project, the API process, the operator, host root |
+| **Sensitive metadata** | Variable names, environment names, project names, member user IDs, account emails | Plaintext                                                                                  | The same parties as secrets, plus anyone with database access       |
+| **Credentials**        | Password hashes, `JWT_SECRET`, `ENCRYPTION_KEY`                                   | Password hashes in `users`; keys outside the database (`.env`/container environment today) | The API process and host root; never returned by the API            |
+| **Operational**        | ObjectIds, timestamps, `key_version`, record sizes                                | Plaintext                                                                                  | Anyone with database access                                         |
 
 Decisions recorded here:
 
@@ -99,8 +99,8 @@ The API cannot:
 
 ### Database-only attacker
 
-*Scenario: a stolen dump or backup, read-only database credentials, or a
-compromised database host.*
+_Scenario: a stolen dump or backup, read-only database credentials, or a
+compromised database host._
 
 - Gets: ciphertext values, plaintext names and structure, account emails,
   Argon2id password hashes, membership lists.
@@ -119,8 +119,8 @@ authority.
 
 ### Stolen bearer token
 
-*Scenario: a token copied from the CLI keyring, process memory, logs, or a
-compromised client machine.*
+_Scenario: a token copied from the CLI keyring, process memory, logs, or a
+compromised client machine._
 
 - Gets: the full access of that user until the token expires.
 - Can: list projects, read and decrypt every value in every project the user
@@ -137,7 +137,7 @@ already-issued token because `get_current_user_id` does not re-check the
 
 ### Malicious or curious project member
 
-*Scenario: the owner adds a user, or a member's account is taken over.*
+_Scenario: the owner adds a user, or a member's account is taken over._
 
 - Gets: read access to every environment in the project.
 - Can: read and decrypt all values, create and update variables, delete
@@ -152,8 +152,8 @@ revoke access. See `plan.md` §4.
 
 ### Compromised host or API process
 
-*Scenario: remote code execution in the API, a compromised container image, or
-root on the host.*
+_Scenario: remote code execution in the API, a compromised container image, or
+root on the host._
 
 - Gets: `ENCRYPTION_KEY`, `JWT_SECRET`, MongoDB credentials, and the API code.
 - Can: decrypt every value, mint tokens for any user, read plaintext from
@@ -166,7 +166,7 @@ isolation today. One leaked `ENCRYPTION_KEY` decrypts every project.
 
 ### Compromised client machine
 
-*Scenario: malware or another process running as the CLI user.*
+_Scenario: malware or another process running as the CLI user._
 
 - Gets: plaintext `.env.*` files, the bearer token from the OS keyring, and
   plaintext values while the CLI is running.
@@ -175,7 +175,7 @@ isolation today. One leaked `ENCRYPTION_KEY` decrypts every project.
 
 ### Network attacker
 
-*Scenario: an attacker on the path between the CLI and the API.*
+_Scenario: an attacker on the path between the CLI and the API._
 
 - With HTTPS: TLS 1.2/1.3 protects credentials and values in transit. The
   client verifies the certificate against the platform trust store.
@@ -203,24 +203,24 @@ deployment or compliance discussion.
 Each gap is tracked in `plan.md`; this table records the state at the time of
 writing.
 
-| Gap | Impact | Fix |
-| --- | --- | --- |
-| One global `ENCRYPTION_KEY`; `key_version` is stored but ignored on decrypt | One key leak decrypts every project; rotation breaks old values | §2 |
-| AAD binds only `environment_id:name` | Ciphertext can be relabelled or replayed between same-named records; key version is not authenticated | §2 |
-| Key and JWT secret live in `.env`/container environment | `docker inspect` and `/proc/<pid>/environ` expose them | §2, §9 |
-| No email verification; registration returns a token immediately | An attacker can register a victim's email and use the account | §3 |
-| Login distinguishes unknown email (`404`) from wrong password (`401`) | Account enumeration | §3 |
-| No rate limiting or lockout | Brute force and password spraying | §3 |
-| No revocation, logout, or refresh tokens | A stolen token works until expiry | §3 |
-| Flat membership: no roles, consent, or removal | Any member can write and delete; owner can grant access silently | §4 |
-| Variable names are not validated | Newline/`=`/`#` injection into clients' `.env` files; AAD ambiguity | §5 |
-| No unique indexes; `ObjectId` not validated | Duplicate races; invalid ids return `500` | §5 |
-| `Cache-Control: no-store` only on `/v1/variable` | Auth and project/environment responses may be cached | §6 |
-| No audit log; emails and names are logged | No detection or attribution; metadata leaks into logs | §7 |
-| Bundled MongoDB has no authentication or TLS | Anyone who can reach it reads everything | §8 |
-| HTTP-only fallback; `Host`-based redirect; no HSTS or rate limit | Plaintext exposure and open redirect | §9 |
-| Secrets may exist in git history; `.gitignore` is narrow | Key and token leakage through the repository | §10 |
-| Backup handling is undocumented | Backups may be unprotected or unencrypted | §2, §8 |
+| Gap                                                                         | Impact                                                                                                | Fix    |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------ |
+| One global `ENCRYPTION_KEY`; `key_version` is stored but ignored on decrypt | One key leak decrypts every project; rotation breaks old values                                       | §2     |
+| AAD binds only `environment_id:name`                                        | Ciphertext can be relabelled or replayed between same-named records; key version is not authenticated | §2     |
+| Key and JWT secret live in `.env`/container environment                     | `docker inspect` and `/proc/<pid>/environ` expose them                                                | §2, §9 |
+| No email verification; registration returns a token immediately             | An attacker can register a victim's email and use the account                                         | §3     |
+| Login distinguishes unknown email (`404`) from wrong password (`401`)       | Account enumeration                                                                                   | §3     |
+| No rate limiting or lockout                                                 | Brute force and password spraying                                                                     | §3     |
+| No revocation, logout, or refresh tokens                                    | A stolen token works until expiry                                                                     | §3     |
+| Flat membership: no roles, consent, or removal                              | Any member can write and delete; owner can grant access silently                                      | §4     |
+| Variable names are not validated                                            | Newline/`=`/`#` injection into clients' `.env` files; AAD ambiguity                                   | §5     |
+| No unique indexes; `ObjectId` not validated                                 | Duplicate races; invalid ids return `500`                                                             | §5     |
+| `Cache-Control: no-store` only on `/v1/variable`                            | Auth and project/environment responses may be cached                                                  | §6     |
+| No audit log; emails and names are logged                                   | No detection or attribution; metadata leaks into logs                                                 | §7     |
+| Bundled MongoDB has no authentication or TLS                                | Anyone who can reach it reads everything                                                              | §8     |
+| HTTP-only fallback; `Host`-based redirect; no HSTS or rate limit            | Plaintext exposure and open redirect                                                                  | §9     |
+| Secrets may exist in git history; `.gitignore` is narrow                    | Key and token leakage through the repository                                                          | §10    |
+| Backup handling is undocumented                                             | Backups may be unprotected or unencrypted                                                             | §2, §8 |
 
 ## Assumptions
 

@@ -15,12 +15,15 @@ class Settings(BaseSettings):
     MONGO_URI: str = "mongodb://127.0.0.1:27017"
     DATABASE: str = "sharenv_test"
 
-    JWT_SECRET: str
+    JWT_SECRET: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY: int = 60
 
-    ENCRYPTION_KEY: str
+    ENCRYPTION_KEY: str = ""
     ENCRYPTION_KEY_VERSION: int = 1
+    NONCE_SIZE: int = 12
+    TOKEN_BYTES: int = 32
+    KEY_INFO: str = "sharenv:project-key:v1"
 
     @field_validator("JWT_SECRET")
     @classmethod

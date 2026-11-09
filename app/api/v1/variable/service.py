@@ -19,7 +19,7 @@ from app.api.v1.variable.schemas import (
     UpdateVariableRes,
 )
 from app.core.config import settings
-from app.core.crypto import decrypt_value, encrypt_value
+from app.core.crypto import decrypt_value, encrypt_value, unwrap_data_key
 from app.core.logger import get_logger
 from app.core.utils import get_current_time
 from app.db.mongodb import mongo
@@ -33,7 +33,7 @@ class Variable:
 
     async def _get_environment_for_user(
         self, user_id: str, environment_id: str
-    ) -> dict:
+    ) -> tuple[dict, str]:
         if self.db.environments is None or self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
 
@@ -52,9 +52,11 @@ class Variable:
         if not project:
             raise UnauthorizedAccess("Unauthorized Access")
 
-        return environment
+        return environment, project["data_key"]
 
-    async def _get_variable_for_user(self, user_id: str, variable_id: str) -> dict:
+    async def _get_variable_for_user(
+        self, user_id: str, variable_id: str
+    ) -> tuple[dict, str]:
         if (
             self.db.environments is None
             or self.db.projects is None
@@ -81,7 +83,7 @@ class Variable:
         if not project:
             raise UnauthorizedAccess("Unauthorized Access")
 
-        return variable
+        return variable, project["data_key"]
 
     async def create_variable(
         self, user_id: str, environment_id: str, payload: CreateVariableReq
@@ -91,7 +93,7 @@ class Variable:
         if self.db.environments is None or self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        await self._get_environment_for_user(user_id, environment_id)
+        _, wrapped_key = await self._get_environment_for_user(user_id, environment_id)
 
         variable_exists = await self.db.variables.find_one(
             {"name": payload.name, "environment_id": environment_id}
@@ -99,11 +101,14 @@ class Variable:
         if variable_exists:
             raise VariableAlreadyExists("variable already exists")
 
+        data_key = unwrap_data_key(wrapped_key)
         now = get_current_time()
 
         variable_payload = VariableModel(
             name=payload.name,
-            value_enc=encrypt_value(payload.value, environment_id, payload.name),
+            value_enc=encrypt_value(
+                payload.value, data_key, environment_id, payload.name
+            ),
             key_version=settings.ENCRYPTION_KEY_VERSION,
             environment_id=environment_id,
             created_at=now,
@@ -127,28 +132,54 @@ class Variable:
         if self.db.environments is None or self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        await self._get_environment_for_user(user_id, environment_id)
+        _, wrapped_key = await self._get_environment_for_user(user_id, environment_id)
 
         variables = await self.db.variables.find(
             {"environment_id": environment_id}
         ).to_list(length=None)
 
+        data_key = unwrap_data_key(wrapped_key)
         res = []
 
         for variable in variables:
             model = VariableModel.model_validate(variable)
-            res.append(
-                GetVariablesRes(
-                    _id=str(model.id),
-                    name=model.name,
-                    value=decrypt_value(
-                        model.value_enc, model.environment_id, model.name
-                    ),
-                    environment_id=model.environment_id,
-                    created_at=model.created_at,
-                    updated_at=model.updated_at,
+            try:
+                value = decrypt_value(
+                    model.value_enc,
+                    data_key,
+                    model.environment_id,
+                    model.name,
                 )
-            )
+
+                res.append(
+                    GetVariablesRes(
+                        _id=str(model.id),
+                        name=model.name,
+                        value=value,
+                        environment_id=model.environment_id,
+                        created_at=model.created_at,
+                        updated_at=model.updated_at,
+                    )
+                )
+
+            except Exception:
+                log.exception(
+                    "failed to decrypt variable %s in environment %s",
+                    model.name,
+                    environment_id,
+                )
+
+                res.append(
+                    GetVariablesRes(
+                        _id=str(model.id),
+                        name=model.name,
+                        value=None,
+                        environment_id=model.environment_id,
+                        created_at=model.created_at,
+                        updated_at=model.updated_at,
+                        undecryptable=True,
+                    )
+                )
 
         return res
 
@@ -158,7 +189,7 @@ class Variable:
         if self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        variable = await self._get_variable_for_user(user_id, variable_id)
+        variable, _ = await self._get_variable_for_user(user_id, variable_id)
 
         res = await self.db.variables.delete_one({"_id": variable["_id"]})
 
@@ -194,7 +225,9 @@ class Variable:
         if self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        variable = await self._get_variable_for_user(user_id, variable_id)
+        variable, wrapped_key = await self._get_variable_for_user(user_id, variable_id)
+
+        data_key = unwrap_data_key(wrapped_key)
 
         now = get_current_time()
         res = await self.db.variables.update_one(
@@ -202,7 +235,10 @@ class Variable:
             {
                 "$set": {
                     "value_enc": encrypt_value(
-                        payload.value, variable["environment_id"], variable["name"]
+                        payload.value,
+                        data_key,
+                        variable["environment_id"],
+                        variable["name"],
                     ),
                     "updated_at": now.isoformat(),
                 },
@@ -226,7 +262,9 @@ class Variable:
         if self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        await self._get_environment_for_user(user_id, environment_id)
+        _, wrapped_key = await self._get_environment_for_user(user_id, environment_id)
+
+        data_key = unwrap_data_key(wrapped_key)
 
         now = get_current_time()
         res = await self.db.variables.find_one_and_update(
@@ -234,9 +272,9 @@ class Variable:
             {
                 "$set": {
                     "value_enc": encrypt_value(
-                        payload.value, environment_id, variable_name
+                        payload.value, data_key, environment_id, variable_name
                     ),
-                    "updated_at": now,
+                    "updated_at": now.isoformat(),
                 },
             },
         )

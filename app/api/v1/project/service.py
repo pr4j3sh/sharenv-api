@@ -1,7 +1,6 @@
 from bson.objectid import ObjectId
 
 from app.api.v1.auth.exceptions import UserNotFound
-from app.api.v1.environment.exceptions import EnvironmentNotFound
 from app.api.v1.project.exceptions import (
     CannotAddSameUser,
     CreateProjectError,
@@ -16,6 +15,7 @@ from app.api.v1.project.schemas import (
     CreateProjectRes,
     DeleteProjectRes,
 )
+from app.core.crypto import get_data_key, wrap_data_key
 from app.core.logger import get_logger
 from app.core.utils import get_current_time
 from app.db.mongodb import mongo
@@ -46,10 +46,16 @@ class Project:
         if project_exists:
             raise ProjectAlreadyExists("project already exists")
 
+        data_key = get_data_key()
+        wrapped_key = wrap_data_key(data_key)
         now = get_current_time()
 
         project_payload = ProjectModel(
-            name=payload.name, user_id=user_id, created_at=now, updated_at=now
+            name=payload.name,
+            user_id=user_id,
+            data_key=wrapped_key,
+            created_at=now,
+            updated_at=now,
         )
 
         res = await self.db.projects.insert_one(
@@ -116,7 +122,9 @@ class Project:
         if not user_exists:
             raise UserNotFound("User does not exist")
 
-        query = {"$or": [{"user_id": user_id}, {"users": user_id}]}
+        query: dict[str, list[dict[str, str]] | str] = {
+            "$or": [{"user_id": user_id}, {"users": user_id}]
+        }
 
         if project_name is not None:
             query["name"] = project_name

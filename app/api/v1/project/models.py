@@ -13,6 +13,7 @@ class ProjectModel(BaseModel):
     id: ObjectId | None = Field(default=None, alias="_id")
     name: str
     user_id: str
+    data_key: str
     created_at: datetime
     updated_at: datetime
     users: list[str] = []

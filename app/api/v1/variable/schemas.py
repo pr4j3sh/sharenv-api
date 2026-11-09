@@ -21,10 +21,11 @@ class GetVariablesRes(BaseModel):
 
     id: str = Field(alias="_id")
     name: str
-    value: str | int | bool
+    value: str | int | bool | None
     environment_id: str
     created_at: datetime
     updated_at: datetime
+    undecryptable: bool = False
 
 
 class UpdateVariableReq(BaseModel):
