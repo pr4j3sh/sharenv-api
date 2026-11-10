@@ -26,7 +26,7 @@ def _parse_key_registry(raw: str) -> dict[int, bytes]:
             )
 
         if not isinstance(key, str):
-            raise ValueError(
+            raise TypeError(
                 f"key registry entry for version {version} must be a base64 string"
             )
 
@@ -114,7 +114,7 @@ class Settings(BaseSettings):
         return secret
 
     @model_validator(mode="after")
-    def validate_encryption_keys(self) -> "Settings":
+    def validate_encryption_keys(self) -> Settings:
         if self.ENCRYPTION_KEYS_JSON and self.ENCRYPTION_KEYS_FILE:
             raise ValueError(
                 "set only one of ENCRYPTION_KEYS_JSON and ENCRYPTION_KEYS_FILE"
@@ -150,7 +150,7 @@ class Settings(BaseSettings):
         return self._encryption_keys
 
     @model_validator(mode="after")
-    def validate_resend_api_key(self) -> "Settings":
+    def validate_resend_api_key(self) -> Settings:
         if not self.DEBUG and not self.RESEND_API_KEY.strip():
             raise ValueError("RESEND_API_KEY must not be empty when DEBUG is false")
         return self

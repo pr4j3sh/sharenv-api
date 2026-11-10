@@ -29,7 +29,7 @@ class GetVariablesRes(BaseModel):
 
 
 class UpdateVariableReq(BaseModel):
-    value: str
+    value: str | int | bool
 
 
 class UpdateVariableRes(BaseModel):

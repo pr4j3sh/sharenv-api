@@ -41,6 +41,9 @@ class Auth:
 
     async def _rollback_registration(self, user_id: ObjectId) -> None:
         try:
+            if self.db.users is None:
+                raise RuntimeError("mongodb is not connected")
+
             await self.db.users.delete_one({"_id": user_id})
         except Exception:
             log.exception("failed to roll back registration for %s", user_id)
