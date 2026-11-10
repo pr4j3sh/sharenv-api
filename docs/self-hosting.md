@@ -34,11 +34,78 @@ printf '{"1": "%s"}\n' "$(openssl rand -base64 32)" > deploy/secrets/encryption_
 > `ENCRYPTION_KEY_VERSION=1` marks that key active. Rotating the master key is
 > documented in [docs/key-rotation.md](key-rotation.md).
 
-Account verification emails are sent through [Resend](https://resend.com):
+## Email (optional but recommended)
 
-- `RESEND_API_KEY` — required in production. Empty is allowed only when
-  `DEBUG=True`, which skips delivery and logs the OTP instead.
-- `EMAIL_FROM` — a verified sender, e.g. `Acme <no-reply@example.com>`.
+sharenv does **not** require a mail server to function. By default
+(`EMAIL_PROVIDER=none`) no mail is sent: accounts are created unverified,
+unverified users **can log in**, and invitation tokens are returned by the
+API so the owner can share them out-of-band (Slack, in person, …). The
+invitation response includes both `token` and `email_sent`.
+
+> **Warning — `EMAIL_PROVIDER=none` weakens identity.** Without email, an
+> account's address is self-asserted: anyone who can reach a publicly exposed
+> instance can claim to be `alice@abc.com`. In this mode you **must** restrict
+> network access (VPN, nginx allowlist, or an SSO proxy in front of the API),
+> and treat `email_verified=false` in login/refresh responses as a signal, not
+> as proof. The sharenv CLI warns on sensitive actions (invites, member
+> changes, project delete, variable push/delete) while your account is
+> unverified; the warning can be ignored only on a trusted network.
+
+Three supported setups:
+
+### A. No mail (default) — out-of-band invites
+
+```env
+EMAIL_PROVIDER=none
+```
+
+Workflow: create the project → `sharenv invite create` → share the printed
+token with the teammate → teammate runs `sharenv invite accept <token>`.
+No DNS, SPF, or third-party account needed. Note that unverified accounts
+cannot complete OTP verification, so login simply does not require it in this
+mode; `email_verified` in the login/refresh response is always `false`.
+
+### B. Your org's mail relay (recommended when available)
+
+```env
+EMAIL_PROVIDER=smtp
+SMTP_HOST=mailrelay.abc.com     # or smtp-relay.gmail.com (Workspace)
+SMTP_PORT=587
+SMTP_USER=                      # empty for an IP/host allowlisted relay
+SMTP_PASSWORD=
+SMTP_TLS=starttls               # starttls | ssl | none
+EMAIL_FROM=sharenv <sharenv@abc.com>
+```
+
+Works with: an internal Postfix relay, Google Workspace SMTP relay
+(`smtp-relay.gmail.com`, registered IPs or SMTP AUTH with a service mailbox),
+Microsoft 365 (`smtp.office365.com:587` — enable *Authenticated SMTP* for a
+service mailbox; basic-auth SMTP is being deprecated), or the SMTP endpoint of
+any transactional provider (SES, SendGrid, Mailgun…). Intra-org delivery
+through your own relay needs no SPF/DKIM/DMARC work.
+
+With a provider configured, OTP verification is enforced as usual, invitation
+emails are sent, and the invitation token is *also* returned in the API
+response as a fallback. Email delivery is best-effort: an SMTP outage does not
+block invites (`email_sent: false` in the response tells you to share the
+token yourself).
+
+### C. Resend
+
+```env
+EMAIL_PROVIDER=resend
+RESEND_API_KEY=re_xxxxxxxx
+EMAIL_FROM=Acme <no-reply@abc.com>   # a sender verified in Resend
+```
+
+Same behavior as (B); needs a Resend account and a verified domain/sender.
+
+To move from `none` to `smtp`/`resend` later, existing unverified users can
+verify through the usual resend-OTP flow — no migration needed.
+
+> `DEBUG=True` and `EMAIL_PROVIDER=console` both skip delivery and log OTPs
+> and invitation tokens; never enable them in production. `console` exists for
+> local development only.
 
 Optional tuning (defaults shown):
 

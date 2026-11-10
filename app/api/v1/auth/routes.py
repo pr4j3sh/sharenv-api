@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.v1.auth.exceptions import (
     CreateTokenError,
+    EmailNotConfigured,
     InvalidCredentials,
     InvalidRefreshToken,
     LogoutError,
@@ -172,6 +173,11 @@ async def verify_user(user_id: str, req: VerifyUserReq):
             status_code=404,
             detail=str(e),
         ) from e
+    except EmailNotConfigured as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        ) from e
     except UserAlreadyVerified as e:
         raise HTTPException(
             status_code=409,
@@ -207,6 +213,11 @@ async def resend_otp(user_id: str):
     except UserNotFound as e:
         raise HTTPException(
             status_code=404,
+            detail=str(e),
+        ) from e
+    except EmailNotConfigured as e:
+        raise HTTPException(
+            status_code=400,
             detail=str(e),
         ) from e
     except UserAlreadyVerified as e:

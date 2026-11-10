@@ -44,6 +44,12 @@ class CreateInvitationRes(BaseModel):
     role: Literal["writer", "reader"]
     environments: list[str]
     expires_at: datetime
+    # The raw invitation token, returned to the owner at creation time so the
+    # invite can be delivered out-of-band (e.g. pasted into chat). Stored
+    # hashed server-side; this is the only time it is exposed.
+    token: str
+    # True when a mail provider is configured and an invitation email was sent.
+    email_sent: bool
 
     @field_serializer("expires_at")
     def serialize_datetime(self, value: datetime) -> str:

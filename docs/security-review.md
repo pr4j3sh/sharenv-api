@@ -17,7 +17,9 @@ exception is written down in the PR description.
 - [ ] The handler does not accept a user id, project id, or role from the
       request body when it can be derived from the token.
 - [ ] Tokens are never logged, echoed in errors, or returned anywhere except
-      the login/register response.
+      the login/refresh response and the invitation create response (which
+      exposes the raw invitation token to the owner for out-of-band sharing;
+      it is stored hashed server-side).
 - [ ] If the change adds a new token type or claim, it is validated explicitly
       and the algorithm is allowlisted.
 

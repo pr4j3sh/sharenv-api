@@ -88,7 +88,9 @@ Decisions recorded here:
   codes are stored as HMAC-SHA256 keyed with `JWT_SECRET`, so a database-only
   attacker cannot use them to verify accounts. They are short-lived (10
   minutes by default) and are delivered by email through the configured
-  provider (Resend), which therefore sees recipient addresses and OTPs.
+  provider (`smtp` or `resend`), which therefore sees recipient addresses and
+  OTPs. When `EMAIL_PROVIDER=none` no OTP is generated at all and verification
+  is impossible — see "Unverified operation" below.
 
 ## What the server can see
 
@@ -98,7 +100,7 @@ The API can, by design:
 - read all names, project structure, membership, and account emails;
 - verify passwords against stored Argon2id hashes;
 - deliver account verification emails through the configured provider
-  (Resend), which sees recipient addresses and the OTPs;
+  (`smtp` or `resend`), which sees recipient addresses and the OTPs;
 - mint a valid bearer token for any user id;
 - read its own encryption and signing keys.
 
@@ -177,14 +179,17 @@ taken over._
 - Cannot: non-owners cannot invite, change member access, remove members, or
   delete the project. A member cannot access environments not granted to them.
 - Membership requires the invitee's consent (accepting a token as the matching,
-  verified user). The owner can remove a member, change their granted
+  verified — or, in `EMAIL_PROVIDER=none` mode, merely account-holder — user).
+  The owner can remove a member, change their granted
   environments/role, or the member can leave; access is enforced from DB
   membership/grants on every request, so revocation and grant changes take
   effect immediately. `GET /v1/project/` returns the caller's role but not the
   member list.
 
 There is still no membership-change audit trail (see `plan.md` §4/§7). The
-invitation email (token) is delivered via the configured provider. Per-environment
+invitation (token) is returned to the owner at creation time for out-of-band
+delivery, and additionally emailed when a provider is configured (best-effort).
+Per-environment
 access is an explicit grant list (no wildcard for members); uniform RBAC applies
 (no special-casing by environment name).
 
@@ -204,6 +209,30 @@ Each project has its own data key, so a leaked single project key cannot
 decrypt another project's values. But there is no hardware-backed key
 boundary and no KMS: the master key registry wraps every project key, so one
 leaked master key still decrypts every project it ever wrapped.
+
+## Unverified operation (`EMAIL_PROVIDER=none`)
+
+With no mail provider configured, verification is impossible, so the deployment
+operates with weakened identity guarantees. This mode exists for orgs that
+cannot or do not want to run/point at a mail relay; it must not be exposed to
+an untrusted network.
+
+- New accounts are created unverified and **may log in**; login reports
+  `email_verified: false` in the response (also in `/v1/auth/refresh`).
+- Invitation accept requires token possession plus the email match, but no
+  verification (nobody can ever become verified in this mode).
+- Invitation tokens are returned at creation time for out-of-band delivery;
+  the copy-link is a legitimate first-class channel (possession of the token
+  is the bearer proof, bound to the invited email string).
+- Identities are self-asserted: anyone who can reach the API may claim any
+  address. The deployment therefore **requires** network-level access control
+  (VPN, nginx allowlist, SSO proxy) and organizational trust of members.
+- The sharenv CLI warns on sensitive actions (invitations, member changes,
+  project delete, variable push/delete) while the caller's account is
+  unverified. Warnings are advisory, not enforcement; a server-wide
+  unverified deployment must not be treated as authenticating mailboxes.
+- Switching later to `smtp`/`resend` re-enables verification (existing users
+  verify via the resend-OTP flow) with no data migration.
 
 ## Crypto-shredding
 
@@ -269,7 +298,7 @@ writing.
 | Gap                                                                                 | Impact                                                                                                | Fix    |
 | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------ |
 | `JWT_SECRET` still lives in `.env`/container environment                             | `docker inspect` and `/proc/<pid>/environ` expose it                                                  | §9     |
-| Verification email depends on a third party (Resend)                                 | Provider compromise exposes recipient addresses and OTPs                                               | §3     |
+| Verification email depends on the configured provider (`smtp`/`resend`)      | Provider compromise exposes recipient addresses and OTPs; `none` mode has no verification at all (see "Unverified operation") | §3     |
 | No MFA/TOTP                                                                         | A stolen or guessed password alone is enough after verification                                       | §3     |
 | Auth rate limiting is in-memory and per-process                                      | Counters reset on restart and are not shared across uvicorn workers (nginx adds a coarse outer limit)  | §3, §9 |
 | Per-email login lockout is an account-availability DoS surface                       | An attacker can lock out any email address by sending failures                                        | §3     |
@@ -289,8 +318,11 @@ writing.
 - TLS terminates at nginx and clients verify the certificate.
 - MongoDB is reachable only by the API, never directly from the internet.
 - Host root is trusted; a root compromise is outside the protection claims.
-- `DEBUG=False` in production. `DEBUG=True` skips email delivery and logs
-  verification OTPs instead; it exists only for local development.
+- `DEBUG=False` in production. `DEBUG=True` and `EMAIL_PROVIDER=console` skip
+  email delivery and log verification OTPs/invitation tokens instead; they
+  exist only for local development.
+- When `EMAIL_PROVIDER=none`, the API is only reachable on a trusted network
+  (VPN/allowlist/SSO proxy); identity is self-asserted in this mode.
 - Clients are trusted with the values they are authorized to pull.
 - No compliance guarantee is made (for example, for regulated data) beyond
   the controls described here.

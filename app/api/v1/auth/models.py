@@ -12,8 +12,8 @@ class UserModel(BaseModel):
     email: str
     password: str
     is_verified: bool = False
-    otp: str
-    otp_expiry: datetime
+    otp: str | None = None
+    otp_expiry: datetime | None = None
     # Bumping token_version revokes every token (access and refresh) issued
     # for the user; logout and refresh-token replay increment it.
     token_version: int = 0

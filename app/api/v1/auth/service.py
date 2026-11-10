@@ -6,6 +6,7 @@ from pymongo.errors import DuplicateKeyError
 
 from app.api.v1.auth.exceptions import (
     CreateTokenError,
+    EmailNotConfigured,
     InvalidCredentials,
     InvalidRefreshToken,
     LogoutError,
@@ -75,13 +76,20 @@ class Auth:
         if user_exists:
             raise UserAlreadyExists("User already exists")
 
-        otp = generate_otp()
         now = get_current_time()
+        # Without a mail provider an OTP can never be delivered, so the account
+        # is created unverified with no OTP. The account can log in (login only
+        # requires verification when a provider is configured) and can verify
+        # later once a provider is set up.
+        email_enabled = settings.email_enabled
+        otp = generate_otp() if email_enabled else None
         user_payload = UserModel(
             email=email,
             password=hash_password(payload.password),
-            otp=hash_otp(otp),
-            otp_expiry=now + timedelta(minutes=settings.OTP_EXPIRY),
+            otp=hash_otp(otp) if otp else None,
+            otp_expiry=(
+                now + timedelta(minutes=settings.OTP_EXPIRY) if otp else None
+            ),
         )
 
         try:
@@ -97,20 +105,29 @@ class Auth:
         if not user or not user.inserted_id:
             raise RegisterError("Failed to register user")
 
-        try:
-            res = await send_email(payload=EmailPayload(to=email, otp=otp))
-        except Exception as e:
-            await self._rollback_registration(user.inserted_id)
-            raise SendEmailError("Failed to send email") from e
+        if email_enabled:
+            try:
+                res = await send_email(payload=EmailPayload(to=email, otp=otp))
+            except Exception as e:
+                log.exception("Failed to send OTP email")
+                await self._rollback_registration(user.inserted_id)
+                raise SendEmailError("Failed to send email") from e
 
-        if not res.get("id"):
-            await self._rollback_registration(user.inserted_id)
-            raise SendEmailError("Failed to send email")
+            if not res.get("id"):
+                await self._rollback_registration(user.inserted_id)
+                raise SendEmailError("Failed to send email")
 
-        return RegisterRes(success=True, user_id=str(user.inserted_id))
+        return RegisterRes(
+            success=True,
+            user_id=str(user.inserted_id),
+            verification_required=email_enabled,
+        )
 
     async def verify_user(self, user_id: str, otp: str) -> VerifyUserRes:
         log.info(f"verifying user {user_id}")
+
+        if not settings.email_enabled:
+            raise EmailNotConfigured("email provider is not configured")
 
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
@@ -168,6 +185,9 @@ class Auth:
 
     async def resent_otp(self, user_id: str) -> ResendOtpRes:
         log.info(f"resending otp for user {user_id}")
+
+        if not settings.email_enabled:
+            raise EmailNotConfigured("email provider is not configured")
 
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
@@ -249,9 +269,12 @@ class Auth:
             )
             raise InvalidCredentials("invalid credentials")
 
-        # Only revealed after a correct password, so it does not leak account
-        # existence to someone who does not know the credentials.
-        if not user.get("is_verified"):
+        # The unverified gate exists so the owner knows who actually controls
+        # a mailbox. With no provider configured verification is impossible, so
+        # unverified users must be allowed to log in; the API reports
+        # email_verified=False and the CLI warns about it on sensitive actions.
+        # With a provider configured, unverified accounts stay locked out.
+        if not user.get("is_verified") and settings.email_enabled:
             raise UserNotVerified("User is unverified")
 
         token_version = user.get("token_version", 0)
@@ -268,7 +291,11 @@ class Auth:
 
         await login_failures.clear(f"fail:{email}")
 
-        return LoginRes(token=token, refresh_token=refresh_token)
+        return LoginRes(
+            token=token,
+            refresh_token=refresh_token,
+            email_verified=bool(user.get("is_verified")),
+        )
 
     async def refresh(self, refresh_token: str) -> RefreshRes:
         log.info("refreshing token")
@@ -297,7 +324,7 @@ class Auth:
         # Single-use: the atomic swap below means only one concurrent use of a
         # refresh token can win. A stale jti with a still-valid version means
         # the token was replayed or raced, so revoke the whole chain.
-        if not token_version:
+        if token_version is None:
             raise InvalidRefreshToken("invalid refresh token")
 
         new_token = create_access_token(str(user_oid), token_version)
@@ -319,7 +346,11 @@ class Auth:
                 )
             raise InvalidRefreshToken("invalid refresh token")
 
-        return RefreshRes(token=new_token, refresh_token=new_refresh_token)
+        return RefreshRes(
+            token=new_token,
+            refresh_token=new_refresh_token,
+            email_verified=bool(user.get("is_verified")),
+        )
 
     async def logout(self, user_id: str) -> LogoutRes:
         log.info("logging out user %s", user_id)

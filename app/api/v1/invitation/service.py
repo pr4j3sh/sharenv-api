@@ -158,17 +158,22 @@ class Invitation:
         if not res or not res.inserted_id:
             raise InvitationNotFound("failed to create invitation")
 
-        try:
-            await send_invitation_email(
-                to=email,
-                project_name=project["name"],
-                role=payload.role,
-                token=token,
-            )
-        except Exception:
-            # Roll back so we don't leave an undeliverable invitation.
-            await self.db.invitations.delete_one({"_id": res.inserted_id})
-            raise
+        # Only send mail when a provider is configured. Delivery is
+        # best-effort: the owner receives the token below either way and can
+        # deliver it out-of-band, so an SMTP failure must not roll back an
+        # invitation that is still fully usable via copy-link.
+        email_sent = False
+        if settings.email_enabled:
+            try:
+                await send_invitation_email(
+                    to=email,
+                    project_name=project["name"],
+                    role=payload.role,
+                    token=token,
+                )
+                email_sent = True
+            except Exception:
+                log.exception("Failed to send invitation email; owner can share the token")
 
         return CreateInvitationRes(
             invitation_id=str(res.inserted_id),
@@ -177,6 +182,8 @@ class Invitation:
             role=payload.role,
             environments=env_ids,
             expires_at=expires_at,
+            token=token,
+            email_sent=email_sent,
         )
 
     async def get_invitations(
@@ -250,7 +257,11 @@ class Invitation:
         if not user:
             raise UserNotFound("user not found")
 
-        if not user.get("is_verified"):
+        # Without a provider configured, verification is impossible, so
+        # possession of the out-of-band token plus the email match is the
+        # proof of identity. With a provider configured, the account must
+        # have completed verification first.
+        if not user.get("is_verified") and settings.email_enabled:
             raise InvitationEmailMismatch("email not verified")
 
         user_email = (user.get("email") or "").strip().lower()

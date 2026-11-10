@@ -77,8 +77,23 @@ class Settings(BaseSettings):
     TOKEN_BYTES: int = 32
     KEY_INFO: str = "sharenv:project-key:v1"
 
+    # Email provider:
+    #   none    — default. No mail is sent; accounts stay unverified and
+    #             unverified users may log in. Invites are shared out-of-band
+    #             via the token returned by the invitation endpoint.
+    #   console — log delivery (dev only; never enable DEBUG in production)
+    #   smtp    — generic SMTP relay (org mail infra, Workspace, M365, SES…)
+    #   resend  — Resend API (requires RESEND_API_KEY)
+    EMAIL_PROVIDER: Literal["none", "console", "smtp", "resend"] = "none"
     RESEND_API_KEY: str = ""
-    EMAIL_FROM: str = "Acme <onboarding@resend.dev>"
+    EMAIL_FROM: str = "sharenv <sharenv@localhost>"
+
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_TLS: Literal["starttls", "ssl", "none"] = "starttls"
+    SMTP_TIMEOUT: int = 10  # seconds
 
     OTP_EXPIRY: int = 10
     OTP_LENGTH: int = 6
@@ -190,10 +205,27 @@ class Settings(BaseSettings):
         return [host.strip() for host in self.ALLOWED_HOSTS.split(",") if host.strip()]
 
     @model_validator(mode="after")
-    def validate_resend_api_key(self) -> Settings:
-        if not self.DEBUG and not self.RESEND_API_KEY.strip():
-            raise ValueError("RESEND_API_KEY must not be empty when DEBUG is false")
+    def validate_email_provider(self) -> Settings:
+        if self.EMAIL_PROVIDER == "resend" and not self.DEBUG:
+            if not self.RESEND_API_KEY.strip():
+                raise ValueError("RESEND_API_KEY must not be empty when EMAIL_PROVIDER=resend")
+        if self.EMAIL_PROVIDER == "smtp":
+            if not self.SMTP_HOST.strip():
+                raise ValueError("SMTP_HOST must not be empty when EMAIL_PROVIDER=smtp")
+            if not self.EMAIL_FROM.strip():
+                raise ValueError("EMAIL_FROM must not be empty when EMAIL_PROVIDER=smtp")
         return self
+
+    @property
+    def email_enabled(self) -> bool:
+        """True when the OTP verification flow is active.
+
+        True for smtp/resend/console providers, and also when DEBUG is set
+        (DEBUG skips delivery and logs the OTP instead — the long-standing
+        local-development behavior). Only EMAIL_PROVIDER=none without DEBUG
+        disables verification.
+        """
+        return self.DEBUG or self.EMAIL_PROVIDER != "none"
 
 
 settings = Settings()
