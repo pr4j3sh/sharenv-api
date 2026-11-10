@@ -108,8 +108,12 @@ class Project:
         return CreateProjectRes(project_id=str(res.inserted_id))
 
     async def get_projects(
-        self, user_id: str, project_name: str | None = None
-    ) -> list[GetProjectsRes]:
+        self,
+        user_id: str,
+        project_name: str | None = None,
+        limit: int = settings.PAGINATION_DEFAULT_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[GetProjectsRes], int]:
         log.info(f"fetching projects {user_id}")
 
         if self.db.projects is None:
@@ -122,7 +126,14 @@ class Project:
         if project_name is not None:
             query["name"] = project_name
 
-        projects = await self.db.projects.find(query).to_list(length=None)
+        total = await self.db.projects.count_documents(query)
+        projects = (
+            await self.db.projects.find(query)
+            .sort([("created_at", 1), ("_id", 1)])
+            .skip(offset)
+            .limit(limit)
+            .to_list(length=limit)
+        )
 
         results: list[GetProjectsRes] = []
         for project in projects:
@@ -140,7 +151,7 @@ class Project:
                 )
             )
 
-        return results
+        return results, total
 
     async def delete_project(
         self, user_id: str, project_id: str, password: str

@@ -227,23 +227,36 @@ Current code: `app/api/v1/project/*`, `app/api/v1/environment/*`,
 
 ## 6. API behavior, headers, and error semantics
 
-- [ ] **P0 — Add `Cache-Control: no-store` to auth and all secret-bearing
+- [x] **P0 — Add `Cache-Control: no-store` to auth and all secret-bearing
       responses.** Current middleware only covers `/v1/variable`
       (`app/main.py:21-28`). Add `Pragma: no-cache` and `Vary: Authorization`.
-- [ ] **P1 — Normalize authorization status codes.** Use `404` for
+      (`app/core/middleware.py` SecurityMiddleware: all `/v1/*` responses and any
+      response carrying `Authorization` get `no-store`, `Pragma: no-cache`, and
+      merged `Vary: Authorization`)
+- [x] **P1 — Normalize authorization status codes.** Use `404` for
       not-found-or-not-a-member where possible, and `403` for authenticated but
       forbidden. Avoid `401` for project/environment not found
       (`environment/routes.py`, `project/routes.py`).
-- [ ] **P1 — Add pagination** to projects, environments, and variables. Replace
+      (private resources are hidden as `404`; `401` is only for missing/invalid bearer auth;
+      authenticated-but-forbidden maps to `403`; `AGENTS.md` updated)
+- [x] **P1 — Add pagination** to projects, environments, and variables. Replace
       `to_list(length=None)` with bounded queries.
-- [ ] **P1 — Add a request body size limit in the app** (not only nginx) and a
+      (`limit`/`offset` query params, default 50 max 100; JSON bodies unchanged;
+      totals/next offset exposed via `X-Total-Count`/`X-Limit`/`X-Offset`/`X-Next-Offset`)
+- [x] **P1 — Add a request body size limit in the app** (not only nginx) and a
       JSON depth/size guard.
-- [ ] **P1 — Sanitize validation errors.** FastAPI `422` responses echo invalid
+      (`app/core/middleware.py` ASGI body cap incl. chunked/missing Content-Length and
+      `JSON_MAX_DEPTH`/`JSON_MAX_NODES` guard; early 400/413 responses included)
+- [x] **P1 — Sanitize validation errors.** FastAPI `422` responses echo invalid
       input; ensure secret values are never included in error responses.
-- [ ] **P2 — Add `TrustedHostMiddleware`** with an explicit host allowlist.
-- [ ] **P2 — Keep CORS closed** (no wildcard) unless a browser client is added.
-- [ ] **P2 — Add security headers at the app layer** (`X-Content-Type-Options`,
+      (custom `RequestValidationError` handler: only `loc`/`msg`/`type`, never `input`/`ctx`)
+- [x] **P2 — Add `TrustedHostMiddleware`** with an explicit host allowlist.
+      (`ALLOWED_HOSTS` config, comma-separated loopback/test defaults)
+- [x] **P2 — Keep CORS closed** (no wildcard) unless a browser client is added.
+      (no CORSMiddleware added; noted in `app/main.py`)
+- [x] **P2 — Add security headers at the app layer** (`X-Content-Type-Options`,
       `Referrer-Policy`, `X-Frame-Options`) in addition to nginx.
+      (`nosniff`, `no-referrer`, `DENY` on every HTTP response)
 
 ---
 

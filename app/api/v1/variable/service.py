@@ -55,7 +55,7 @@ class Variable:
             {"$match": {"environment_id": {"$in": env_ids}}},
             {"$group": {"_id": None, "total": {"$sum": "$value_size"}}},
         ]
-        agg = await self.db.variables.aggregate(pipeline).to_list(length=1)
+        agg = await (await self.db.variables.aggregate(pipeline)).to_list(length=1)
         if not agg:
             return 0
         return int(agg[0].get("total") or 0)
@@ -76,11 +76,13 @@ class Variable:
             {"_id": ObjectId(environment["project_id"])}
         )
         if not project:
-            raise UnauthorizedAccess("Unauthorized Access")
+            # Hide the environment's project from the caller.
+            raise EnvironmentNotFound("Environment does not exist")
 
         access = resolve_access(project, user_id)
         if access is None or not access.can_access_env(environment_id):
-            raise UnauthorizedAccess("Unauthorized Access")
+            # Hide environments the caller cannot access.
+            raise EnvironmentNotFound("Environment does not exist")
         if write and not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")
 
@@ -104,18 +106,19 @@ class Variable:
             {"_id": ObjectId(variable["environment_id"])}
         )
         if not environment:
-            raise EnvironmentNotFound("Environment does not exist")
+            raise VariableNotFound("Variable does not exist")
 
         env_id = str(environment["_id"])
         project = await self.db.projects.find_one(
             {"_id": ObjectId(environment["project_id"])}
         )
         if not project:
-            raise UnauthorizedAccess("Unauthorized Access")
+            raise VariableNotFound("Variable does not exist")
 
         access = resolve_access(project, user_id)
         if access is None or not access.can_access_env(env_id):
-            raise UnauthorizedAccess("Unauthorized Access")
+            # Hide variables in environments the caller cannot access.
+            raise VariableNotFound("Variable does not exist")
         if write and not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")
 
@@ -184,8 +187,12 @@ class Variable:
         return CreateVariableRes(variable_id=str(res.inserted_id))
 
     async def get_variables(
-        self, user_id: str, environment_id: str
-    ) -> list[GetVariablesRes]:
+        self,
+        user_id: str,
+        environment_id: str,
+        limit: int = settings.PAGINATION_DEFAULT_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[GetVariablesRes], int]:
         log.info(f"fetching variables {environment_id}")
 
         if self.db.environments is None or self.db.variables is None:
@@ -195,9 +202,16 @@ class Variable:
             user_id, environment_id, write=False
         )
 
-        variables = await self.db.variables.find(
+        total = await self.db.variables.count_documents(
             {"environment_id": environment_id}
-        ).to_list(length=None)
+        )
+        variables = (
+            await self.db.variables.find({"environment_id": environment_id})
+            .sort([("name", 1), ("_id", 1)])
+            .skip(offset)
+            .limit(limit)
+            .to_list(length=limit)
+        )
 
         data_key = unwrap_data_key(project["data_key"], project["key_version"])
         project_id = str(project["_id"])
@@ -245,7 +259,7 @@ class Variable:
                     )
                 )
 
-        return res
+        return res, total
 
     async def delete_variable(self, user_id, variable_id) -> DeleteVariableRes:
         log.info(f"deleting variable {variable_id}")

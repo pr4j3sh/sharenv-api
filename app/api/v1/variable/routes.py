@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import EnvironmentNotFound
@@ -23,6 +23,8 @@ from app.api.v1.variable.schemas import (
 from app.api.v1.variable.service import Variable
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
+from app.core.pagination import set_pagination_headers
+from app.core.config import settings
 from app.core.validation import ensure_variable_name, parse_object_id
 
 router = APIRouter(prefix="/variable", tags=["Variable"])
@@ -33,16 +35,22 @@ log = get_logger(__name__)
 @router.get("/{environment_id}", response_model=list[GetVariablesRes])
 async def get_variables(
     environment_id: str,
+    response: Response,
     user_id: Annotated[str, Depends(get_current_user_id)],
+    limit: Annotated[int, Query(ge=1, le=settings.PAGINATION_MAX_LIMIT)] = settings.PAGINATION_DEFAULT_LIMIT,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ):
     parse_object_id(environment_id, label="environment_id")
     try:
         v = Variable()
-        res = await v.get_variables(user_id, environment_id)
+        res, total = await v.get_variables(user_id, environment_id, limit, offset)
+        set_pagination_headers(
+            response, total=total, limit=limit, offset=offset, item_count=len(res)
+        )
         return res
     except EnvironmentNotFound as e:
         raise HTTPException(
-            status_code=401,
+            status_code=404,
             detail=str(e),
         ) from e
     except UnauthorizedAccess as e:
@@ -71,7 +79,7 @@ async def create_variable(
         return res
     except EnvironmentNotFound as e:
         raise HTTPException(
-            status_code=401,
+            status_code=404,
             detail=str(e),
         ) from e
     except UnauthorizedAccess as e:
@@ -116,12 +124,12 @@ async def delete_variable_by_name(
         return res
     except VariableNotFound as e:
         raise HTTPException(
-            status_code=401,
+            status_code=404,
             detail=str(e),
         ) from e
     except EnvironmentNotFound as e:
         raise HTTPException(
-            status_code=401,
+            status_code=404,
             detail=str(e),
         ) from e
     except UnauthorizedAccess as e:
@@ -149,12 +157,12 @@ async def delete_variable(
         return res
     except VariableNotFound as e:
         raise HTTPException(
-            status_code=401,
+            status_code=404,
             detail=str(e),
         ) from e
     except EnvironmentNotFound as e:
         raise HTTPException(
-            status_code=401,
+            status_code=404,
             detail=str(e),
         ) from e
     except UnauthorizedAccess as e:
@@ -192,12 +200,12 @@ async def update_variable_by_name(
         return res
     except VariableNotFound as e:
         raise HTTPException(
-            status_code=401,
+            status_code=404,
             detail=str(e),
         ) from e
     except EnvironmentNotFound as e:
         raise HTTPException(
-            status_code=401,
+            status_code=404,
             detail=str(e),
         ) from e
     except UnauthorizedAccess as e:
@@ -236,12 +244,12 @@ async def update_variable(
         return res
     except VariableNotFound as e:
         raise HTTPException(
-            status_code=401,
+            status_code=404,
             detail=str(e),
         ) from e
     except EnvironmentNotFound as e:
         raise HTTPException(
-            status_code=401,
+            status_code=404,
             detail=str(e),
         ) from e
     except UnauthorizedAccess as e:

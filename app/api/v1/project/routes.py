@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.api.v1.project.exceptions import (
     CannotModifyOwner,
@@ -26,6 +26,8 @@ from app.api.v1.project.schemas import (
 from app.api.v1.project.service import Project
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
+from app.core.pagination import set_pagination_headers
+from app.core.config import settings
 from app.core.validation import ensure_project_env_name, parse_object_id
 
 router = APIRouter(prefix="/project", tags=["Project"])
@@ -35,14 +37,20 @@ log = get_logger(__name__)
 
 @router.get("/", response_model=list[GetProjectsRes])
 async def get_projects(
+    response: Response,
     user_id: Annotated[str, Depends(get_current_user_id)],
     project_name: str = Query(default=None),
+    limit: Annotated[int, Query(ge=1, le=settings.PAGINATION_MAX_LIMIT)] = settings.PAGINATION_DEFAULT_LIMIT,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ):
     if project_name is not None:
         ensure_project_env_name(project_name, kind="Project")
     try:
         p = Project()
-        res = await p.get_projects(user_id, project_name)
+        res, total = await p.get_projects(user_id, project_name, limit, offset)
+        set_pagination_headers(
+            response, total=total, limit=limit, offset=offset, item_count=len(res)
+        )
         return res
     except Exception as e:
         log.exception("fetching projects failed unexpectedly")
@@ -190,7 +198,7 @@ async def remove_member(
         ) from e
     except ProjectNotFound as e:
         raise HTTPException(
-            status_code=409,
+            status_code=404,
             detail=str(e),
         ) from e
     except Exception as e:
@@ -219,7 +227,7 @@ async def delete_project(
         ) from e
     except ProjectNotFound as e:
         raise HTTPException(
-            status_code=409,
+            status_code=404,
             detail=str(e),
         ) from e
     except Exception as e:
@@ -248,7 +256,7 @@ async def delete_project_by_name(
         ) from e
     except ProjectNotFound as e:
         raise HTTPException(
-            status_code=409,
+            status_code=404,
             detail=str(e),
         ) from e
     except Exception as e:

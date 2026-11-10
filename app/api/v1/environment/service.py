@@ -85,8 +85,13 @@ class Environment:
         return CreateEnvironmentRes(environment_id=str(res.inserted_id))
 
     async def get_environments(
-        self, user_id: str, project_id: str, environment_name: str | None = None
-    ) -> list[EnvironmentModel]:
+        self,
+        user_id: str,
+        project_id: str,
+        environment_name: str | None = None,
+        limit: int = settings.PAGINATION_DEFAULT_LIMIT,
+        offset: int = 0,
+    ) -> tuple[list[EnvironmentModel], int]:
         log.info(f"fetching environments {user_id} {project_id}")
 
         if self.db.environments is None or self.db.projects is None:
@@ -98,23 +103,31 @@ class Environment:
 
         access = resolve_access(project, user_id)
         if access is None:
-            raise UnauthorizedAccess("Unauthorized Access")
+            # Hide the project's environments from non-members.
+            raise ProjectNotFound("Project does not exist")
 
         query: dict = {"project_id": project_id}
 
         if access.environments is not None:
             if not access.environments:
-                return []
+                return [], 0
             query["_id"] = {"$in": [ObjectId(eid) for eid in access.environments]}
 
         if environment_name is not None:
             query["name"] = environment_name
 
-        environments = await self.db.environments.find(query).to_list(length=None)
+        total = await self.db.environments.count_documents(query)
+        environments = (
+            await self.db.environments.find(query)
+            .sort([("created_at", 1), ("_id", 1)])
+            .skip(offset)
+            .limit(limit)
+            .to_list(length=limit)
+        )
 
         return [
             EnvironmentModel.model_validate(environment) for environment in environments
-        ]
+        ], total
 
     async def delete_environment(self, user_id: str, environment_id: str):
         log.info(f"deleting environment {environment_id}")
@@ -137,11 +150,13 @@ class Environment:
             {"_id": ObjectId(environment["project_id"])}
         )
         if not project:
-            raise UnauthorizedAccess("Unauthorized Access")
+            # Hide the environment's project from the caller.
+            raise EnvironmentNotFound("environment does not exist")
 
         access = resolve_access(project, user_id)
         if access is None or not access.can_access_env(environment_id):
-            raise UnauthorizedAccess("Unauthorized Access")
+            # Hide environments the caller cannot access.
+            raise EnvironmentNotFound("environment does not exist")
         if not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")
 
@@ -183,11 +198,13 @@ class Environment:
             {"_id": ObjectId(environment["project_id"])}
         )
         if not project:
-            raise UnauthorizedAccess("Unauthorized Access")
+            # Hide the environment's project from the caller.
+            raise EnvironmentNotFound("environment does not exist")
 
         access = resolve_access(project, user_id)
         if access is None or not access.can_access_env(environment_id):
-            raise UnauthorizedAccess("Unauthorized Access")
+            # Hide environments the caller cannot access.
+            raise EnvironmentNotFound("environment does not exist")
         if not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")
 

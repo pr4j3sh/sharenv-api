@@ -96,6 +96,19 @@ class Settings(BaseSettings):
     # API docs (/docs, /redoc, /openapi.json); disabled by default.
     DOCS_ENABLED: bool = False
 
+    # Explicit Host allowlist for TrustedHostMiddleware. Comma-separated.
+    # Set to the public hostname(s) in production (e.g. "sharenv.example.com").
+    ALLOWED_HOSTS: str = "localhost,127.0.0.1,[::1],testserver"
+
+    # Pagination for list endpoints. Responses remain JSON lists; totals and
+    # the next offset are exposed via X-Total-Count/X-Limit/X-Offset/X-Next-Offset.
+    PAGINATION_DEFAULT_LIMIT: int = 50
+    PAGINATION_MAX_LIMIT: int = 100
+
+    # Guard for JSON request bodies in addition to the byte limit.
+    JSON_MAX_DEPTH: int = 32
+    JSON_MAX_NODES: int = 10000
+
     MIN_PASSWORD_LENGTH: int = 12
     MAX_PASSWORD_BYTES: int = 1024
     WEAK_PASSWORDS: set[str] = {
@@ -171,6 +184,10 @@ class Settings(BaseSettings):
         """Configured master keys by version; the active version is
         ENCRYPTION_KEY_VERSION."""
         return self._encryption_keys
+
+    def allowed_hosts(self) -> list[str]:
+        """Parsed explicit host allowlist for TrustedHostMiddleware."""
+        return [host.strip() for host in self.ALLOWED_HOSTS.split(",") if host.strip()]
 
     @model_validator(mode="after")
     def validate_resend_api_key(self) -> Settings:
