@@ -1,4 +1,6 @@
 import base64
+import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -12,6 +14,18 @@ from app.core.config import settings
 def generate_otp() -> str:
     length = settings.OTP_LENGTH
     return "".join(secrets.choice(string.digits) for _ in range(length))
+
+
+def hash_otp(otp: str) -> str:
+    # HMAC keyed with JWT_SECRET acts as a server-side pepper: a database-only
+    # attacker cannot verify guesses for the stored hash offline.
+    return hmac.new(
+        settings.JWT_SECRET.encode(), otp.encode(), hashlib.sha256
+    ).hexdigest()
+
+
+def verify_otp(stored_hash: str, otp: str) -> bool:
+    return secrets.compare_digest(stored_hash, hash_otp(otp))
 
 
 def get_master_key() -> bytes:

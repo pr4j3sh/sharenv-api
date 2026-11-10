@@ -23,9 +23,10 @@ encrypted**.
 End-to-end encryption (client-held per-project keys, opaque blobs in the API)
 is not implemented. Moving to it would require a CLI-side key store and an
 out-of-band key distribution design for sharing, and would make server-side
-validation of values impossible. The planned direction is to keep server-side
-encryption and strengthen it with per-project data keys and rotation (see
-`plan.md` §2), not to claim E2E properties the system does not have.
+validation of values impossible. The current design keeps server-side
+encryption with per-project data keys wrapped by a single master key (the
+remaining rotation work is tracked in `plan.md` §2), not to claim E2E
+properties the system does not have.
 
 Do not describe this system as "zero-knowledge", "end-to-end encrypted", or
 "the server cannot read your secrets".
@@ -52,12 +53,12 @@ There is no key material in the CLI. All key material is held by the server.
 
 ## Data classification
 
-| Class                  | Examples                                                                          | At rest                                                                                    | Who can read it                                                     |
-| ---------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| **Secret**             | Variable values                                                                   | AES-256-GCM ciphertext (`value_enc`)                                                       | Any member of the project, the API process, the operator, host root |
-| **Sensitive metadata** | Variable names, environment names, project names, member user IDs, account emails | Plaintext                                                                                  | The same parties as secrets, plus anyone with database access       |
-| **Credentials**        | Password hashes, `JWT_SECRET`, `ENCRYPTION_KEY`                                   | Password hashes in `users`; keys outside the database (`.env`/container environment today) | The API process and host root; never returned by the API            |
-| **Operational**        | ObjectIds, timestamps, `key_version`, record sizes                                | Plaintext                                                                                  | Anyone with database access                                         |
+| Class                  | Examples                                                                          | At rest                                                                                                                     | Who can read it                                                     |
+| ---------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **Secret**             | Variable values                                                                   | AES-256-GCM ciphertext (`value_enc`)                                                                                        | Any member of the project, the API process, the operator, host root |
+| **Sensitive metadata** | Variable names, environment names, project names, member user IDs, account emails | Plaintext                                                                                                                   | The same parties as secrets, plus anyone with database access       |
+| **Credentials**        | Password hashes, HMAC-hashed verification OTPs, `JWT_SECRET`, `ENCRYPTION_KEY`    | Argon2id password hashes and peppered OTP hashes in `users`; keys outside the database (`.env`/container environment today) | The API process and host root; never returned by the API            |
+| **Operational**        | ObjectIds, timestamps, `key_version`, record sizes                                | Plaintext                                                                                                                   | Anyone with database access                                         |
 
 Decisions recorded here:
 
@@ -73,9 +74,16 @@ Decisions recorded here:
 - **Password hashes are credentials, not secrets.** They are Argon2id hashes
   produced by `pwdlib` and are never returned. A database-only attacker can
   attempt offline guessing against them; weak or reused passwords will fall.
-- **Keys are never stored in the database.** `ENCRYPTION_KEY` and
-  `JWT_SECRET` are loaded from configuration (`.env` or the container
-  environment) today. See the gaps table.
+- **Keys are never stored in the database in usable form.** Each project has a
+  random data key used to encrypt its variable values; it is stored in
+  `projects.data_key` wrapped (encrypted) under the master `ENCRYPTION_KEY`.
+  `ENCRYPTION_KEY` and `JWT_SECRET` are loaded from configuration (`.env` or
+  the container environment) today. See the gaps table.
+- **Verification OTPs are peppered, not plaintext.** Account verification
+  codes are stored as HMAC-SHA256 keyed with `JWT_SECRET`, so a database-only
+  attacker cannot use them to verify accounts. They are short-lived (10
+  minutes by default) and are delivered by email through the configured
+  provider (Resend), which therefore sees recipient addresses and OTPs.
 
 ## What the server can see
 
@@ -84,6 +92,8 @@ The API can, by design:
 - read every variable value in plaintext while handling a request;
 - read all names, project structure, membership, and account emails;
 - verify passwords against stored Argon2id hashes;
+- deliver account verification emails through the configured provider
+  (Resend), which sees recipient addresses and the OTPs;
 - mint a valid bearer token for any user id;
 - read its own encryption and signing keys.
 
@@ -103,14 +113,16 @@ _Scenario: a stolen dump or backup, read-only database credentials, or a
 compromised database host._
 
 - Gets: ciphertext values, plaintext names and structure, account emails,
-  Argon2id password hashes, membership lists.
+  Argon2id password hashes, peppered verification OTP hashes, membership
+  lists, and wrapped per-project data keys.
 - Can: enumerate projects, environments, and variable names; attempt offline
   password guessing; delete or modify records if the access is writable;
   replay an existing ciphertext into a record with the same AAD; restore an
   old snapshot.
 - Cannot: decrypt values without `ENCRYPTION_KEY`, which is not stored in the
   database; forge a new valid ciphertext without the key; recover a password
-  that resists Argon2id guessing.
+  that resists Argon2id guessing; verify an account with a stolen OTP hash
+  because it is peppered with a server-side secret.
 
 Limits: AES-GCM authenticates each record, but the AAD currently binds only
 `environment_id:name`. A ciphertext can be moved between records that share
@@ -144,7 +156,8 @@ _Scenario: the owner adds a user, or a member's account is taken over._
   variables, and delete environments. Membership is currently a flat list with
   no roles.
 - Cannot: add other members or delete the project; those are owner-only.
-- Can also: see the full member id list through `GET /v1/project/`.
+- Cannot: read the member id list; `GET /v1/project/` returns only project
+  name, owner, and timestamps.
 
 There is no invitation or consent step, no member removal endpoint, and no
 audit trail, so a member can silently exfiltrate values and the owner cannot
@@ -161,8 +174,10 @@ root on the host._
 - Equals: full compromise of every secret in the deployment. Host root also
   reaches the database volume and any backups on the host.
 
-There is no hardware-backed key boundary, no KMS, and no per-project key
-isolation today. One leaked `ENCRYPTION_KEY` decrypts every project.
+Each project has its own data key, so a leaked single project key cannot
+decrypt another project's values. But there is no hardware-backed key
+boundary and no KMS: the master `ENCRYPTION_KEY` wraps every project key, so
+one leaked master key still decrypts every project.
 
 ### Compromised client machine
 
@@ -203,24 +218,24 @@ deployment or compliance discussion.
 Each gap is tracked in `plan.md`; this table records the state at the time of
 writing.
 
-| Gap                                                                         | Impact                                                                                                | Fix    |
-| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------ |
-| One global `ENCRYPTION_KEY`; `key_version` is stored but ignored on decrypt | One key leak decrypts every project; rotation breaks old values                                       | §2     |
-| AAD binds only `environment_id:name`                                        | Ciphertext can be relabelled or replayed between same-named records; key version is not authenticated | §2     |
-| Key and JWT secret live in `.env`/container environment                     | `docker inspect` and `/proc/<pid>/environ` expose them                                                | §2, §9 |
-| No email verification; registration returns a token immediately             | An attacker can register a victim's email and use the account                                         | §3     |
-| Login distinguishes unknown email (`404`) from wrong password (`401`)       | Account enumeration                                                                                   | §3     |
-| No rate limiting or lockout                                                 | Brute force and password spraying                                                                     | §3     |
-| No revocation, logout, or refresh tokens                                    | A stolen token works until expiry                                                                     | §3     |
-| Flat membership: no roles, consent, or removal                              | Any member can write and delete; owner can grant access silently                                      | §4     |
-| Variable names are not validated                                            | Newline/`=`/`#` injection into clients' `.env` files; AAD ambiguity                                   | §5     |
-| No unique indexes; `ObjectId` not validated                                 | Duplicate races; invalid ids return `500`                                                             | §5     |
-| `Cache-Control: no-store` only on `/v1/variable`                            | Auth and project/environment responses may be cached                                                  | §6     |
-| No audit log; emails and names are logged                                   | No detection or attribution; metadata leaks into logs                                                 | §7     |
-| Bundled MongoDB has no authentication or TLS                                | Anyone who can reach it reads everything                                                              | §8     |
-| HTTP-only fallback; `Host`-based redirect; no HSTS or rate limit            | Plaintext exposure and open redirect                                                                  | §9     |
-| Secrets may exist in git history; `.gitignore` is narrow                    | Key and token leakage through the repository                                                          | §10    |
-| Backup handling is undocumented                                             | Backups may be unprotected or unencrypted                                                             | §2, §8 |
+| Gap                                                                                 | Impact                                                                                                | Fix    |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------ |
+| Single master key version; `key_version` stored but unused on decrypt               | Master key rotation breaks existing values; no rotation runbook                                       | §2     |
+| AAD binds only `environment_id:name`                                                | Ciphertext can be relabelled or replayed between same-named records; key version is not authenticated | §2     |
+| Key and JWT secret live in `.env`/container environment                             | `docker inspect` and `/proc/<pid>/environ` expose them                                                | §2, §9 |
+| Verification email depends on a third party (Resend); OTP endpoints are unthrottled | Provider compromise exposes OTPs; OTP brute force and email bombing                                   | §3     |
+| Login distinguishes unknown email (`404`) from wrong password (`401`)               | Account enumeration                                                                                   | §3     |
+| No rate limiting or lockout                                                         | Brute force and password spraying                                                                     | §3     |
+| No revocation, logout, or refresh tokens                                            | A stolen token works until expiry                                                                     | §3     |
+| Flat membership: no roles, consent, or removal                                      | Any member can write and delete; owner can grant access silently                                      | §4     |
+| Variable names are not validated                                                    | Newline/`=`/`#` injection into clients' `.env` files; AAD ambiguity                                   | §5     |
+| No unique indexes; `ObjectId` not validated                                         | Duplicate races; invalid ids return `500`                                                             | §5     |
+| `Cache-Control: no-store` only on `/v1/variable`                                    | Auth and project/environment responses may be cached                                                  | §6     |
+| No audit log; emails and names are logged                                           | No detection or attribution; metadata leaks into logs                                                 | §7     |
+| Bundled MongoDB has no authentication or TLS                                        | Anyone who can reach it reads everything                                                              | §8     |
+| HTTP-only fallback; `Host`-based redirect; no HSTS or rate limit                    | Plaintext exposure and open redirect                                                                  | §9     |
+| Secrets may exist in git history; `.gitignore` is narrow                            | Key and token leakage through the repository                                                          | §10    |
+| Backup handling is undocumented                                                     | Backups may be unprotected or unencrypted                                                             | §2, §8 |
 
 ## Assumptions
 
@@ -228,6 +243,8 @@ writing.
 - TLS terminates at nginx and clients verify the certificate.
 - MongoDB is reachable only by the API, never directly from the internet.
 - Host root is trusted; a root compromise is outside the protection claims.
+- `DEBUG=False` in production. `DEBUG=True` skips email delivery and logs
+  verification OTPs instead; it exists only for local development.
 - Clients are trusted with the values they are authorized to pull.
 - No compliance guarantee is made (for example, for regulated data) beyond
   the controls described here.

@@ -8,9 +8,14 @@ wheels/
 
 # Virtual environments
 .venv
-.env
-.env.docker
+.env*
+!.env.example
+!.env.docker.example
 
 # Self-signed / user-provided TLS certificates
 deploy/certs/*
 !deploy/certs/.gitkeep
+*.pem
+*.key
+
+

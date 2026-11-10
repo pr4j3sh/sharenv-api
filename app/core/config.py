@@ -1,7 +1,7 @@
 import base64
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str = ""
     EMAIL_FROM: str = "Acme <onboarding@resend.dev>"
 
-    OTP_EXPIRY: int = 1
+    OTP_EXPIRY: int = 10
     OTP_LENGTH: int = 6
 
     MIN_PASSWORD_LENGTH: int = 12
@@ -60,14 +60,7 @@ class Settings(BaseSettings):
         if len(set(secret)) < 8:
             raise ValueError("JWT_SECRET has insufficient character diversity")
 
-        return value
-
-    @field_validator("RESEND_API_KEY")
-    @classmethod
-    def validate_resend_api_key(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("RESEND_API_KEY must not be empty")
-        return value
+        return secret
 
     @field_validator("ENCRYPTION_KEY")
     @classmethod
@@ -81,6 +74,12 @@ class Settings(BaseSettings):
             raise ValueError("ENCRYPTION_KEY must decode to 32 bytes")
 
         return value
+
+    @model_validator(mode="after")
+    def validate_resend_api_key(self) -> "Settings":
+        if not self.DEBUG and not self.RESEND_API_KEY.strip():
+            raise ValueError("RESEND_API_KEY must not be empty when DEBUG is false")
+        return self
 
 
 settings = Settings()

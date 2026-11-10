@@ -4,8 +4,12 @@ from app.api.v1.auth.exceptions import (
     CreateTokenError,
     InvalidCredentials,
     RegisterError,
+    ResendOtpError,
+    SendEmailError,
     UserAlreadyExists,
+    UserAlreadyVerified,
     UserNotFound,
+    UserNotVerified,
     VerifyOtpError,
 )
 from app.api.v1.auth.schemas import (
@@ -14,6 +18,7 @@ from app.api.v1.auth.schemas import (
     RegisterReq,
     RegisterRes,
     ResendOtpRes,
+    VerifyUserReq,
     VerifyUserRes,
 )
 from app.api.v1.auth.service import Auth
@@ -36,6 +41,11 @@ async def register(req: RegisterReq):
             detail=str(e),
         ) from e
     except RegisterError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+        ) from e
+    except SendEmailError as e:
         raise HTTPException(
             status_code=500,
             detail=str(e),
@@ -64,6 +74,11 @@ async def login(req: LoginReq):
             status_code=404,
             detail=str(e),
         ) from e
+    except UserNotVerified as e:
+        raise HTTPException(
+            status_code=403,
+            detail="email_not_verified",
+        ) from e
     except InvalidCredentials as e:
         raise HTTPException(
             status_code=401,
@@ -82,15 +97,20 @@ async def login(req: LoginReq):
         ) from e
 
 
-@router.post("/verify/{user_id}/{otp}", response_model=VerifyUserRes)
-async def verify_user(user_id: str, otp: str):
+@router.post("/verify/{user_id}", response_model=VerifyUserRes)
+async def verify_user(user_id: str, req: VerifyUserReq):
     try:
         a = Auth()
-        res = await a.verify_user(user_id, otp)
+        res = await a.verify_user(user_id, req.otp)
         return res
     except UserNotFound as e:
         raise HTTPException(
             status_code=404,
+            detail=str(e),
+        ) from e
+    except UserAlreadyVerified as e:
+        raise HTTPException(
+            status_code=409,
             detail=str(e),
         ) from e
     except VerifyOtpError as e:
@@ -122,9 +142,19 @@ async def resend_otp(user_id: str):
             status_code=404,
             detail=str(e),
         ) from e
-    except VerifyOtpError as e:
+    except UserAlreadyVerified as e:
         raise HTTPException(
-            status_code=401,
+            status_code=409,
+            detail=str(e),
+        ) from e
+    except ResendOtpError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+        ) from e
+    except SendEmailError as e:
+        raise HTTPException(
+            status_code=500,
             detail=str(e),
         ) from e
     except CreateTokenError as e:

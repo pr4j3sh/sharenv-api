@@ -8,13 +8,13 @@ from app.api.v1.project.exceptions import (
     ProjectAlreadyExists,
     ProjectNotFound,
 )
-from app.api.v1.project.models import ProjectModel
 from app.api.v1.project.schemas import (
     AddUserReq,
     AddUserRes,
     CreateProjectReq,
     CreateProjectRes,
     DeleteProjectRes,
+    GetProjectsRes,
 )
 from app.api.v1.project.service import Project
 from app.core.dependencies import get_current_user_id
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/project", tags=["Project"])
 log = get_logger(__name__)
 
 
-@router.get("/", response_model=list[ProjectModel])
+@router.get("/", response_model=list[GetProjectsRes])
 async def get_projects(
     user_id: Annotated[str, Depends(get_current_user_id)],
     project_name: str = Query(default=None),

@@ -50,6 +50,10 @@ class LoginRes(BaseModel):
     token: str
 
 
+class VerifyUserReq(BaseModel):
+    otp: str
+
+
 class EmailPayload(BaseModel):
     to: EmailStr
     subject: str = "Email Verification"

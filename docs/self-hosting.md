@@ -19,6 +19,22 @@ openssl rand -base64 32  # ENCRYPTION_KEY
 
 > Put the generated values into `JWT_SECRET` and `ENCRYPTION_KEY` in `.env.docker`.
 
+Account verification emails are sent through [Resend](https://resend.com):
+
+- `RESEND_API_KEY` — required in production. Empty is allowed only when
+  `DEBUG=True`, which skips delivery and logs the OTP instead.
+- `EMAIL_FROM` — a verified sender, e.g. `Acme <no-reply@example.com>`.
+
+Optional tuning (defaults shown):
+
+```env
+OTP_EXPIRY=10  # minutes before a verification OTP expires
+OTP_LENGTH=6   # digits in the OTP
+```
+
+> Never enable `DEBUG` in production: it disables email delivery and logs
+> verification OTPs.
+
 ## 2. Start with HTTP
 
 ```bash

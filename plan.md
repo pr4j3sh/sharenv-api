@@ -138,10 +138,10 @@ Current code: `app/api/v1/project/*`, `app/api/v1/environment/*`,
       owner-only or role-gated. Enforce in `_get_environment_for_user` and the
       delete/update paths (`variable/service.py:34-84`,
       `environment/service.py:128-165`).
-- [ ] **P1 — Stop returning the member ID list to every member.** Filter
+- [x] **P1 — Stop returning the member ID list to every member.** Filter
       `ProjectModel.users` from `GET /project/` or return a minimal DTO
       (`project/models.py:18`, `project/service.py:106-126`).
-- [ ] **P1 — Normalize email in `add_user`.** Use
+- [x] **P1 — Normalize email in `add_user`.** Use
       `payload.email.strip().lower()` to match register/login
       (`project/service.py:86`).
 - [ ] **P1 — Add an audit trail for membership changes.** Who added/removed whom,
@@ -270,7 +270,7 @@ Current files: `compose.yaml`, `Dockerfile`, `deploy/nginx/*`, `.env*`.
 
 ## 10. Repository and operational hygiene
 
-- [ ] **P0 — Fix `.gitignore`.** It only ignores `.env` and `.env.docker`;
+- [x] **P0 — Fix `.gitignore`.** It only ignores `.env` and `.env.docker`;
       add `.env*` (with `!.env.example` / `!.env.docker.example`). Add
       `*.pem`, `*.key`, and `deploy/certs/*`.
 - [ ] **P0 — Add secret scanning** (gitleaks/trufflehog) to CI/pre-commit.

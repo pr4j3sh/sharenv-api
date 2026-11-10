@@ -90,7 +90,7 @@ class Project:
         if not project:
             raise ProjectNotFound("project does not exist")
 
-        user = await self.db.users.find_one({"email": payload.email})
+        user = await self.db.users.find_one({"email": payload.email.strip().lower()})
 
         if not user:
             raise UserNotFound("User does not exist")
@@ -105,8 +105,6 @@ class Project:
 
         if not res:
             raise ProjectNotFound("project does not exist")
-
-        log.info(res)
 
         return AddUserRes(project_id=project_id)
 
