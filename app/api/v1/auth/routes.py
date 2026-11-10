@@ -33,6 +33,7 @@ from app.api.v1.auth.service import Auth
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
 from app.core.rate_limit import enforce_auth_ip_limit
+from app.core.validation import parse_object_id
 
 router = APIRouter(
     prefix="/auth",
@@ -161,6 +162,7 @@ async def logout(user_id: Annotated[str, Depends(get_current_user_id)]):
 
 @router.post("/verify/{user_id}", response_model=VerifyUserRes)
 async def verify_user(user_id: str, req: VerifyUserReq):
+    parse_object_id(user_id, label="user_id")
     try:
         a = Auth()
         res = await a.verify_user(user_id, req.otp)
@@ -197,6 +199,7 @@ async def verify_user(user_id: str, req: VerifyUserReq):
 
 @router.post("/resend/{user_id}", response_model=ResendOtpRes)
 async def resend_otp(user_id: str):
+    parse_object_id(user_id, label="user_id")
     try:
         a = Auth()
         res = await a.resent_otp(user_id)

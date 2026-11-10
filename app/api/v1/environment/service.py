@@ -1,4 +1,5 @@
 from bson.objectid import ObjectId
+from pymongo.errors import DuplicateKeyError
 
 from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import (
@@ -6,6 +7,7 @@ from app.api.v1.environment.exceptions import (
     DeleteEnvironmentFailed,
     EnvironmentAlreadyExists,
     EnvironmentNotFound,
+    EnvironmentQuotaExceeded,
 )
 from app.api.v1.environment.models import EnvironmentModel
 from app.api.v1.environment.schemas import (
@@ -16,6 +18,7 @@ from app.api.v1.environment.schemas import (
 from app.api.v1.project.exceptions import ProjectNotFound
 from app.api.v1.project.permissions import resolve_access
 from app.api.v1.variable.exceptions import DeleteVariableFailed
+from app.core.config import settings
 from app.core.logger import get_logger
 from app.core.utils import get_current_time
 from app.db.mongodb import mongo
@@ -45,6 +48,10 @@ class Environment:
         if not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")
 
+        env_count = await self.db.environments.count_documents({"project_id": project_id})
+        if env_count >= settings.MAX_ENVIRONMENTS_PER_PROJECT:
+            raise EnvironmentQuotaExceeded("environment quota exceeded")
+
         environment_exists = await self.db.environments.find_one(
             {"name": payload.name, "project_id": project_id}
         )
@@ -60,12 +67,15 @@ class Environment:
             updated_at=now,
         )
 
-        res = await self.db.environments.insert_one(
-            environment_payload.model_dump(
-                by_alias=True,
-                exclude_none=True,
+        try:
+            res = await self.db.environments.insert_one(
+                environment_payload.model_dump(
+                    by_alias=True,
+                    exclude_none=True,
+                )
             )
-        )
+        except DuplicateKeyError as e:
+            raise EnvironmentAlreadyExists("environment already exists") from e
 
         if not res or not res.inserted_id:
             raise CreateEnvironmentError("failed to create environment")

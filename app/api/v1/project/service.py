@@ -1,5 +1,6 @@
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
+from pymongo.errors import DuplicateKeyError
 
 from app.api.v1.project.exceptions import (
     CannotModifyOwner,
@@ -8,6 +9,7 @@ from app.api.v1.project.exceptions import (
     MemberNotFound,
     ProjectAlreadyExists,
     ProjectNotFound,
+    ProjectQuotaExceeded,
     ReauthenticationFailed,
 )
 from app.api.v1.project.models import ProjectModel
@@ -67,6 +69,10 @@ class Project:
         if self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
 
+        project_count = await self.db.projects.count_documents({"user_id": user_id})
+        if project_count >= settings.MAX_PROJECTS_PER_USER:
+            raise ProjectQuotaExceeded("project quota exceeded")
+
         project_exists = await self.db.projects.find_one(
             {"name": payload.name, "user_id": user_id}
         )
@@ -86,12 +92,15 @@ class Project:
             updated_at=now,
         )
 
-        res = await self.db.projects.insert_one(
-            project_payload.model_dump(
-                by_alias=True,
-                exclude_none=True,
+        try:
+            res = await self.db.projects.insert_one(
+                project_payload.model_dump(
+                    by_alias=True,
+                    exclude_none=True,
+                )
             )
-        )
+        except DuplicateKeyError as e:
+            raise ProjectAlreadyExists("project already exists") from e
 
         if not res or not res.inserted_id:
             raise CreateProjectError("failed to create project")

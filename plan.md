@@ -176,30 +176,52 @@ Current code: `app/api/v1/project/*`, `app/api/v1/environment/*`,
 
 ## 5. Input validation and data integrity
 
-- [ ] **P0 — Allowlist variable names.** Reject names outside a safe set (e.g.
+- [x] **P0 — Allowlist variable names.** Reject names outside a safe set (e.g.
       `^[A-Za-z_][A-Za-z0-9_]*$`, or your chosen dotenv-safe set). This blocks
       newline/`=`/`#` injection into clients' `.env` files and fixes the AAD
       name ambiguity. Add the validator to `CreateVariableReq`
       (`variable/schemas.py:6-8`) and validate in update-by-name.
-- [ ] **P0 — Add length limits.** Variable name, value, email, password,
+      (`app/core/validation.py` `VARIABLE_NAME_RE`/`ensure_variable_name`,
+      `variable/schemas.py`, `variable/routes.py` by-name path params)
+- [x] **P0 — Add length limits.** Variable name, value, email, password,
       project/environment name, and request body. Set a reasonable max value
       size (e.g. 64 KB) and reject oversized payloads with `413/422`.
-- [ ] **P0 — Add unique indexes at startup.** `users.email` (unique),
+      (schema bounds in auth/project/environment/variable/invitation,
+      64 KiB serialized variable values, Content-Length body guard in
+      `app/main.py` returning 413; quota/body caps in `app/core/config.py`)
+- [x] **P0 — Add unique indexes at startup.** `users.email` (unique),
       `projects.(user_id, name)` (unique), `environments.(project_id, name)`
       (unique), `variables.(environment_id, name)` (unique). Create them in
       `app/db/mongodb.py` after connect and handle `DuplicateKeyError` in
       services. Acceptance: concurrent duplicate creates cannot succeed.
-- [ ] **P1 — Validate ObjectIds.** Convert `ObjectId(...)` failures into `400`
+      (`app/db/mongodb.py` idempotent indexes; `DuplicateKeyError` mapped to
+      existing "already exists" domain errors in auth/project/environment/variable
+      create paths; DB treated as temporary, no duplicate preflight/migration)
+- [x] **P1 — Validate ObjectIds.** Convert `ObjectId(...)` failures into `400`
       or `404` instead of a generic `500`. Add a helper used by every route.
-- [ ] **P1 — Validate email format.** Use `pydantic.EmailStr` (or equivalent) in
+      (`app/core/validation.py` `parse_object_id` -> 400; applied to route
+      path/query ids across variable/environment/project/auth/invitation; some
+      service/body-id conversions still use existing handling)
+- [x] **P1 — Validate email format.** Use `pydantic.EmailStr` (or equivalent) in
       auth/project schemas.
-- [ ] **P1 — Add quotas.** Max projects per user, environments per project,
+      (`EmailStr` + bounded/normalized emails in auth and invitation schemas;
+      no separate project-member email field)
+- [x] **P1 — Add quotas.** Max projects per user, environments per project,
       variables per environment, and total bytes per project.
-- [ ] **P1 — Validate environment/project names consistently** on every route
+      (configurable limits in `app/core/config.py`; enforced in project/
+      environment/variable services with quota exceptions mapped to 409; total
+      bytes tracked via `VariableModel.value_size`, best-effort under
+      concurrency)
+- [x] **P1 — Validate environment/project names consistently** on every route
       that accepts them (create and delete-by-name already have regexes; reuse
       them).
-- [ ] **P2 — Normalize boolean/int variable values** consistently between create
+      (shared `ensure_project_env_name`/schema validators; enforced on create,
+      delete-by-name, and relevant query/path params)
+- [x] **P2 — Normalize boolean/int variable values** consistently between create
       (`str | int | bool`) and update (`str`). Decide one representation.
+      (create and update accept/validate `str|int|bool` consistently with the
+      same serialized-size bounds; values remain JSON-typed through crypto/
+      responses as before)
 
 ---
 

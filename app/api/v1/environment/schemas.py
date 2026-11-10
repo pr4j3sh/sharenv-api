@@ -1,6 +1,6 @@
-import re
-
 from pydantic import BaseModel, field_validator
+
+from app.core.validation import validate_project_env_name
 
 
 class CreateEnvironmentReq(BaseModel):
@@ -9,11 +9,7 @@ class CreateEnvironmentReq(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: str) -> str:
-        if not re.fullmatch(r"[a-z0-9_-]+", value):
-            raise ValueError(
-                "Environment name must contain only lowercase letters, numbers, hyphens, and underscores."
-            )
-        return value
+        return validate_project_env_name(value, kind="Environment")
 
 
 class CreateEnvironmentRes(BaseModel):

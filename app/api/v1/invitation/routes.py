@@ -26,6 +26,7 @@ from app.api.v1.project.exceptions import (
 )
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
+from app.core.validation import MAX_INVITATION_TOKEN_LENGTH, parse_object_id
 
 router = APIRouter(tags=["Invitation"])
 
@@ -40,6 +41,7 @@ async def create_invitation(
     req: CreateInvitationReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(project_id, label="project_id")
     try:
         svc = Invitation()
         return await svc.create_invitation(user_id, project_id, req)
@@ -65,6 +67,7 @@ async def get_invitations(
     project_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(project_id, label="project_id")
     try:
         svc = Invitation()
         return await svc.get_invitations(user_id, project_id)
@@ -85,6 +88,8 @@ async def cancel_invitation(
     req: CancelInvitationReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(project_id, label="project_id")
+    parse_object_id(invitation_id, label="invitation_id")
     try:
         svc = Invitation()
         return await svc.cancel_invitation(
@@ -106,6 +111,8 @@ async def accept_invitation(
     token: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    if not token or len(token) > MAX_INVITATION_TOKEN_LENGTH:
+        raise HTTPException(status_code=400, detail="invalid invitation token")
     try:
         svc = Invitation()
         return await svc.accept_invitation(user_id, token)

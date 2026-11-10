@@ -8,6 +8,7 @@ from app.api.v1.environment.exceptions import (
     DeleteEnvironmentFailed,
     EnvironmentAlreadyExists,
     EnvironmentNotFound,
+    EnvironmentQuotaExceeded,
 )
 from app.api.v1.environment.models import EnvironmentModel
 from app.api.v1.environment.schemas import (
@@ -20,6 +21,7 @@ from app.api.v1.project.exceptions import ProjectNotFound
 from app.api.v1.variable.exceptions import DeleteVariableFailed
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
+from app.core.validation import ensure_project_env_name, parse_object_id
 
 router = APIRouter(prefix="/environment", tags=["Environment"])
 
@@ -32,6 +34,9 @@ async def get_environments(
     user_id: Annotated[str, Depends(get_current_user_id)],
     environment_name: str = Query(default=None),
 ):
+    parse_object_id(project_id, label="project_id")
+    if environment_name is not None:
+        ensure_project_env_name(environment_name, kind="Environment")
     try:
         e = Environment()
         res = await e.get_environments(user_id, project_id, environment_name)
@@ -60,6 +65,7 @@ async def create_environemnt(
     req: CreateEnvironmentReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(project_id, label="project_id")
     try:
         e = Environment()
         res = await e.create_environemnt(user_id, project_id, req)
@@ -75,6 +81,11 @@ async def create_environemnt(
             detail=str(e),
         ) from e
     except EnvironmentAlreadyExists as e:
+        raise HTTPException(
+            status_code=409,
+            detail=str(e),
+        ) from e
+    except EnvironmentQuotaExceeded as e:
         raise HTTPException(
             status_code=409,
             detail=str(e),
@@ -98,6 +109,8 @@ async def delete_environemnt_by_name(
     environment_name: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(project_id, label="project_id")
+    ensure_project_env_name(environment_name, kind="Environment")
     try:
         e = Environment()
         res = await e.delete_environment_by_name(user_id, project_id, environment_name)
@@ -135,6 +148,7 @@ async def delete_environemnt(
     environment_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(environment_id, label="environment_id")
     try:
         e = Environment()
         res = await e.delete_environment(user_id, environment_id)

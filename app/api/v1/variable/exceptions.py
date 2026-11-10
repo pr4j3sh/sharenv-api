@@ -2,6 +2,10 @@ class VariableAlreadyExists(Exception):
     pass
 
 
+class VariableQuotaExceeded(Exception):
+    pass
+
+
 class CreateVariableError(Exception):
     pass
 

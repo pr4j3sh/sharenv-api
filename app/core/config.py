@@ -107,6 +107,14 @@ class Settings(BaseSettings):
         "letmein12345",
     }
 
+    # Input validation quotas (DB is treated as temporary; counts are best-effort
+    # under concurrency without transactional counters).
+    MAX_PROJECTS_PER_USER: int = 50
+    MAX_ENVIRONMENTS_PER_PROJECT: int = 50
+    MAX_VARIABLES_PER_ENVIRONMENT: int = 500
+    MAX_TOTAL_VALUE_BYTES_PER_PROJECT: int = 5 * 1024 * 1024
+    MAX_REQUEST_BODY_BYTES: int = 256 * 1024
+
     _encryption_keys: dict[int, bytes] = PrivateAttr(default_factory=dict)
 
     @field_validator("JWT_SECRET")

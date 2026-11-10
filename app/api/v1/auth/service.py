@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 from bson.errors import InvalidId
 from bson.objectid import ObjectId
+from pymongo.errors import DuplicateKeyError
 
 from app.api.v1.auth.exceptions import (
     CreateTokenError,
@@ -83,12 +84,15 @@ class Auth:
             otp_expiry=now + timedelta(minutes=settings.OTP_EXPIRY),
         )
 
-        user = await self.db.users.insert_one(
-            user_payload.model_dump(
-                by_alias=True,
-                exclude_none=True,
+        try:
+            user = await self.db.users.insert_one(
+                user_payload.model_dump(
+                    by_alias=True,
+                    exclude_none=True,
+                )
             )
-        )
+        except DuplicateKeyError as e:
+            raise UserAlreadyExists("User already exists") from e
 
         if not user or not user.inserted_id:
             raise RegisterError("Failed to register user")

@@ -5,15 +5,31 @@ from bson import ObjectId
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_serializer, field_validator
 
 from app.core.utils import validate_password_size
+from app.core.validation import MAX_EMAIL_LENGTH
 
 
 class CreateInvitationReq(BaseModel):
-    email: EmailStr
+    email: EmailStr = Field(max_length=MAX_EMAIL_LENGTH)
     role: Literal["writer", "reader"]
     # Granted environment ids (must belong to the project; may be empty).
     environments: list[str] = Field(default_factory=list)
     # Owner re-authentication.
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("environments")
+    @classmethod
+    def validate_environments(cls, value: list[str]) -> list[str]:
+        if len(value) > 200:
+            raise ValueError("too many environments")
+        for env_id in value:
+            if not isinstance(env_id, str) or len(env_id) != 24:
+                raise ValueError("invalid environment id")
+        return value
 
     @field_validator("password")
     @classmethod

@@ -1,11 +1,12 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.core.config import settings
 from app.core.utils import validate_password_size
+from app.core.validation import MAX_EMAIL_LENGTH, MAX_OTP_LENGTH, MAX_REFRESH_TOKEN_LENGTH
 
 
 class RegisterReq(BaseModel):
-    email: EmailStr
+    email: EmailStr = Field(max_length=MAX_EMAIL_LENGTH)
     password: str
 
     @field_validator("password")
@@ -38,7 +39,7 @@ class VerifyUserRes(BaseModel):
 
 
 class LoginReq(BaseModel):
-    email: EmailStr
+    email: EmailStr = Field(max_length=MAX_EMAIL_LENGTH)
     password: str
 
     @field_validator("password")
@@ -53,11 +54,11 @@ class LoginRes(BaseModel):
 
 
 class VerifyUserReq(BaseModel):
-    otp: str
+    otp: str = Field(min_length=1, max_length=MAX_OTP_LENGTH)
 
 
 class RefreshReq(BaseModel):
-    refresh_token: str
+    refresh_token: str = Field(min_length=1, max_length=MAX_REFRESH_TOKEN_LENGTH)
 
 
 class RefreshRes(BaseModel):
@@ -70,6 +71,6 @@ class LogoutRes(BaseModel):
 
 
 class EmailPayload(BaseModel):
-    to: EmailStr
-    subject: str = "Email Verification"
-    otp: str
+    to: EmailStr = Field(max_length=MAX_EMAIL_LENGTH)
+    subject: str = Field(default="Email Verification", max_length=200)
+    otp: str = Field(min_length=1, max_length=MAX_OTP_LENGTH)

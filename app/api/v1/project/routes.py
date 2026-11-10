@@ -8,6 +8,7 @@ from app.api.v1.project.exceptions import (
     MemberNotFound,
     ProjectAlreadyExists,
     ProjectNotFound,
+    ProjectQuotaExceeded,
     ReauthenticationFailed,
 )
 from app.api.v1.project.schemas import (
@@ -25,6 +26,7 @@ from app.api.v1.project.schemas import (
 from app.api.v1.project.service import Project
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
+from app.core.validation import ensure_project_env_name, parse_object_id
 
 router = APIRouter(prefix="/project", tags=["Project"])
 
@@ -36,6 +38,8 @@ async def get_projects(
     user_id: Annotated[str, Depends(get_current_user_id)],
     project_name: str = Query(default=None),
 ):
+    if project_name is not None:
+        ensure_project_env_name(project_name, kind="Project")
     try:
         p = Project()
         res = await p.get_projects(user_id, project_name)
@@ -62,6 +66,11 @@ async def create_project(
             status_code=409,
             detail=str(e),
         ) from e
+    except ProjectQuotaExceeded as e:
+        raise HTTPException(
+            status_code=409,
+            detail=str(e),
+        ) from e
     except CreateProjectError as e:
         raise HTTPException(
             status_code=500,
@@ -84,6 +93,8 @@ async def update_member_access(
     req: UpdateMemberAccessReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(project_id, label="project_id")
+    parse_object_id(member_id, label="member_id")
     try:
         p = Project()
         res = await p.update_member_access(user_id, project_id, member_id, req)
@@ -121,6 +132,7 @@ async def leave_project(
     project_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(project_id, label="project_id")
     try:
         p = Project()
         res = await p.leave_project(user_id, project_id)
@@ -155,6 +167,8 @@ async def remove_member(
     req: RemoveMemberReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(project_id, label="project_id")
+    parse_object_id(member_id, label="member_id")
     try:
         p = Project()
         res = await p.remove_member(user_id, project_id, member_id, req.password)
@@ -193,6 +207,7 @@ async def delete_project(
     req: DeleteProjectReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(project_id, label="project_id")
     try:
         p = Project()
         res = await p.delete_project(user_id, project_id, req.password)
@@ -221,6 +236,7 @@ async def delete_project_by_name(
     req: DeleteProjectReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    ensure_project_env_name(project_name, kind="Project")
     try:
         p = Project()
         res = await p.delete_project_by_name(user_id, project_name, req.password)

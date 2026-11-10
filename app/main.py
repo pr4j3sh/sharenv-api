@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 
 from app.api.v1.router import router
 from app.core.config import settings
+from app.core.middleware import register_middlewares
 from app.db.mongodb import mongo
 
 
@@ -28,15 +29,7 @@ app = FastAPI(
     ),
 )
 
-
-@app.middleware("http")
-async def add_no_store_header(request: Request, call_next):
-    response = await call_next(request)
-
-    if request.url.path.startswith("/v1/variable"):
-        response.headers["Cache-Control"] = "no-store"
-
-    return response
+register_middlewares(app)
 
 
 @app.get("/health", tags=["Health"])

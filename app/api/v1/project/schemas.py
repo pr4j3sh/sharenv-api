@@ -1,4 +1,3 @@
-import re
 from datetime import datetime
 from typing import Literal
 
@@ -12,6 +11,7 @@ from pydantic import (
 )
 
 from app.core.utils import validate_password_size
+from app.core.validation import validate_project_env_name
 
 
 class CreateProjectReq(BaseModel):
@@ -20,11 +20,7 @@ class CreateProjectReq(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, value: str) -> str:
-        if not re.fullmatch(r"[a-z0-9_-]+", value):
-            raise ValueError(
-                "Project name must contain only lowercase letters, numbers, hyphens, and underscores."
-            )
-        return value
+        return validate_project_env_name(value, kind="Project")
 
 
 class CreateProjectRes(BaseModel):

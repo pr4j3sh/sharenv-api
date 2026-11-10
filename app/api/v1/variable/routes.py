@@ -7,8 +7,10 @@ from app.api.v1.environment.exceptions import EnvironmentNotFound
 from app.api.v1.variable.exceptions import (
     CreateVariableError,
     DeleteVariableFailed,
+    UpdateVariableFailed,
     VariableAlreadyExists,
     VariableNotFound,
+    VariableQuotaExceeded,
 )
 from app.api.v1.variable.schemas import (
     CreateVariableReq,
@@ -21,6 +23,7 @@ from app.api.v1.variable.schemas import (
 from app.api.v1.variable.service import Variable
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
+from app.core.validation import ensure_variable_name, parse_object_id
 
 router = APIRouter(prefix="/variable", tags=["Variable"])
 
@@ -32,6 +35,7 @@ async def get_variables(
     environment_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(environment_id, label="environment_id")
     try:
         v = Variable()
         res = await v.get_variables(user_id, environment_id)
@@ -60,6 +64,7 @@ async def create_variable(
     req: CreateVariableReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(environment_id, label="environment_id")
     try:
         v = Variable()
         res = await v.create_variable(user_id, environment_id, req)
@@ -75,6 +80,11 @@ async def create_variable(
             detail=str(e),
         ) from e
     except VariableAlreadyExists as e:
+        raise HTTPException(
+            status_code=409,
+            detail=str(e),
+        ) from e
+    except VariableQuotaExceeded as e:
         raise HTTPException(
             status_code=409,
             detail=str(e),
@@ -98,6 +108,8 @@ async def delete_variable_by_name(
     variable_name: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(environment_id, label="environment_id")
+    ensure_variable_name(variable_name)
     try:
         v = Variable()
         res = await v.delete_variable_by_name(user_id, environment_id, variable_name)
@@ -130,6 +142,7 @@ async def delete_variable(
     variable_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(variable_id, label="variable_id")
     try:
         v = Variable()
         res = await v.delete_variable(user_id, variable_id)
@@ -169,6 +182,8 @@ async def update_variable_by_name(
     req: UpdateVariableReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(environment_id, label="environment_id")
+    ensure_variable_name(variable_name)
     try:
         v = Variable()
         res = await v.update_variable_by_name(
@@ -190,8 +205,18 @@ async def update_variable_by_name(
             status_code=403,
             detail=str(e),
         ) from e
+    except VariableQuotaExceeded as e:
+        raise HTTPException(
+            status_code=409,
+            detail=str(e),
+        ) from e
+    except UpdateVariableFailed as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e),
+        ) from e
     except Exception as e:
-        log.exception("deleting variable failed unexpectedly")
+        log.exception("updating variable failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",
@@ -204,6 +229,7 @@ async def update_variable(
     req: UpdateVariableReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
+    parse_object_id(variable_id, label="variable_id")
     try:
         v = Variable()
         res = await v.update_variable(user_id, variable_id, req)
@@ -223,13 +249,18 @@ async def update_variable(
             status_code=403,
             detail=str(e),
         ) from e
-    except DeleteVariableFailed as e:
+    except VariableQuotaExceeded as e:
+        raise HTTPException(
+            status_code=409,
+            detail=str(e),
+        ) from e
+    except UpdateVariableFailed as e:
         raise HTTPException(
             status_code=500,
             detail=str(e),
         ) from e
     except Exception as e:
-        log.exception("deleting variable failed unexpectedly")
+        log.exception("updating variable failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",
