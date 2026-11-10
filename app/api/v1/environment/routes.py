@@ -69,6 +69,11 @@ async def create_environemnt(
             status_code=401,
             detail=str(e),
         ) from e
+    except UnauthorizedAccess as e:
+        raise HTTPException(
+            status_code=409,
+            detail=str(e),
+        ) from e
     except EnvironmentAlreadyExists as e:
         raise HTTPException(
             status_code=409,

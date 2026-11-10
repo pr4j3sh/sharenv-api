@@ -53,6 +53,7 @@ LOGIN_FAILURE_LIMIT=5       # failed logins per email before lockout
 LOGIN_LOCKOUT_MINUTES=15
 OTP_VERIFY_ATTEMPTS=10      # wrong OTP guesses per user per OTP lifetime
 OTP_RESEND_LIMIT=3          # OTP resends per user per OTP lifetime
+INVITATION_EXPIRY_DAYS=7    # days before a pending project invitation expires
 ```
 
 > Never enable `DEBUG` in production: it disables email delivery and logs

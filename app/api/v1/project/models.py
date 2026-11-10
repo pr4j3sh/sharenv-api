@@ -1,7 +1,16 @@
 from datetime import datetime
+from typing import Literal
 
 from bson import ObjectId
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
+
+
+class ProjectMember(BaseModel):
+    user_id: str
+    role: Literal["writer", "reader"]
+    # Granted environment ids (explicit list). Owner is not stored here and has
+    # implicit access to all environments.
+    environments: list[str] = Field(default_factory=list)
 
 
 class ProjectModel(BaseModel):
@@ -17,7 +26,7 @@ class ProjectModel(BaseModel):
     key_version: int
     created_at: datetime
     updated_at: datetime
-    users: list[str] = []
+    members: list[ProjectMember] = Field(default_factory=list)
 
     @field_serializer("id")
     def serialize_id(self, value: ObjectId | None) -> str | None:

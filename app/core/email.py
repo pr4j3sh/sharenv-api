@@ -25,3 +25,32 @@ async def send_email(payload: EmailPayload):
         }
     )
     return res
+
+
+async def send_invitation_email(to: str, project_name: str, role: str, token: str):
+    if settings.DEBUG:
+        # Dev-only: never log invitation tokens outside DEBUG.
+        log.info(
+            "DEBUG mode: skipping email delivery, invitation_token=%s to=%s project=%s role=%s",
+            token,
+            to,
+            project_name,
+            role,
+        )
+        return {"id": "debug"}
+
+    resend.api_key = settings.RESEND_API_KEY
+    res = resend.Emails.send(
+        {
+            "from": settings.EMAIL_FROM,
+            "to": [to],
+            "subject": f"Invitation to join {project_name}",
+            "html": (
+                f"<p>You have been invited to join <b>{project_name}</b> "
+                f"as <b>{role}</b>.</p>"
+                f"<p>Use this invitation token to accept:</p>"
+                f"<p><b>{token}</b></p>"
+            ),
+        }
+    )
+    return res

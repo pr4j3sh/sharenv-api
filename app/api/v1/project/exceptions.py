@@ -10,9 +10,18 @@ class ProjectNotFound(Exception):
     pass
 
 
-class CannotAddSameUser(Exception):
-    pass
-
-
 class ReauthenticationFailed(Exception):
     pass
+
+
+class MemberNotFound(Exception):
+    pass
+
+
+class ForbiddenAccess(Exception):
+    """Authenticated but not permitted for this action/role."""
+
+
+class CannotModifyOwner(Exception):
+    pass
+

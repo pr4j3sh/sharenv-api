@@ -2,6 +2,7 @@ from bson.objectid import ObjectId
 
 from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import EnvironmentNotFound
+from app.api.v1.project.permissions import resolve_access
 from app.api.v1.variable.exceptions import (
     CreateVariableError,
     DeleteVariableFailed,
@@ -32,7 +33,7 @@ class Variable:
         self.db = mongo
 
     async def _get_environment_for_user(
-        self, user_id: str, environment_id: str
+        self, user_id: str, environment_id: str, *, write: bool = False
     ) -> tuple[dict, dict]:
         if self.db.environments is None or self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
@@ -44,18 +45,21 @@ class Variable:
             raise EnvironmentNotFound("Environment does not exist")
 
         project = await self.db.projects.find_one(
-            {
-                "_id": ObjectId(environment["project_id"]),
-                "$or": [{"user_id": user_id}, {"users": user_id}],
-            }
+            {"_id": ObjectId(environment["project_id"])}
         )
         if not project:
+            raise UnauthorizedAccess("Unauthorized Access")
+
+        access = resolve_access(project, user_id)
+        if access is None or not access.can_access_env(environment_id):
+            raise UnauthorizedAccess("Unauthorized Access")
+        if write and not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")
 
         return environment, project
 
     async def _get_variable_for_user(
-        self, user_id: str, variable_id: str
+        self, user_id: str, variable_id: str, *, write: bool = False
     ) -> tuple[dict, dict]:
         if (
             self.db.environments is None
@@ -74,13 +78,17 @@ class Variable:
         if not environment:
             raise EnvironmentNotFound("Environment does not exist")
 
+        env_id = str(environment["_id"])
         project = await self.db.projects.find_one(
-            {
-                "_id": ObjectId(environment["project_id"]),
-                "$or": [{"user_id": user_id}, {"users": user_id}],
-            }
+            {"_id": ObjectId(environment["project_id"])}
         )
         if not project:
+            raise UnauthorizedAccess("Unauthorized Access")
+
+        access = resolve_access(project, user_id)
+        if access is None or not access.can_access_env(env_id):
+            raise UnauthorizedAccess("Unauthorized Access")
+        if write and not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")
 
         return variable, project
@@ -93,7 +101,9 @@ class Variable:
         if self.db.environments is None or self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        _, project = await self._get_environment_for_user(user_id, environment_id)
+        _, project = await self._get_environment_for_user(
+            user_id, environment_id, write=True
+        )
 
         variable_exists = await self.db.variables.find_one(
             {"name": payload.name, "environment_id": environment_id}
@@ -137,7 +147,9 @@ class Variable:
         if self.db.environments is None or self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        _, project = await self._get_environment_for_user(user_id, environment_id)
+        _, project = await self._get_environment_for_user(
+            user_id, environment_id, write=False
+        )
 
         variables = await self.db.variables.find(
             {"environment_id": environment_id}
@@ -197,7 +209,9 @@ class Variable:
         if self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        variable, _ = await self._get_variable_for_user(user_id, variable_id)
+        variable, _ = await self._get_variable_for_user(
+            user_id, variable_id, write=True
+        )
 
         res = await self.db.variables.delete_one({"_id": variable["_id"]})
 
@@ -214,7 +228,7 @@ class Variable:
         if self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        await self._get_environment_for_user(user_id, environment_id)
+        await self._get_environment_for_user(user_id, environment_id, write=True)
 
         res = await self.db.variables.find_one_and_delete(
             {"name": variable_name, "environment_id": environment_id}
@@ -233,7 +247,9 @@ class Variable:
         if self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        variable, project = await self._get_variable_for_user(user_id, variable_id)
+        variable, project = await self._get_variable_for_user(
+            user_id, variable_id, write=True
+        )
 
         data_key = unwrap_data_key(project["data_key"], project["key_version"])
 
@@ -273,7 +289,9 @@ class Variable:
         if self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
 
-        _, project = await self._get_environment_for_user(user_id, environment_id)
+        _, project = await self._get_environment_for_user(
+            user_id, environment_id, write=True
+        )
 
         data_key = unwrap_data_key(project["data_key"], project["key_version"])
 

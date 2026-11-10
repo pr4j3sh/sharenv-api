@@ -139,21 +139,28 @@ UserNotFound` for an unknown email (`project/routes.py:82-107`).
 Current code: `app/api/v1/project/*`, `app/api/v1/environment/*`,
 `app/api/v1/variable/*`.
 
-- [ ] **P0 — Require consent for project membership.** Change `add_user` to
+- [x] **P0 — Require consent for project membership.** Change `add_user` to
       create a pending invitation; the invited user must accept before gaining
       access (`project/service.py:67-104`). Notify the invitee. Acceptance: an
       owner cannot silently grant access.
-- [ ] **P0 — Add roles.** At minimum `owner`, `writer`, `reader`. Store roles on
+      (`POST /v1/project/{project_id}/invitations`, `POST /v1/invitations/{token}/accept`;
+      token emailed, hashed at rest with expiry; accept requires matching verified user)
+- [x] **P0 — Add roles.** At minimum `owner`, `writer`, `reader`. Store roles on
       the project (`users` becomes `members: [{user_id, role}]`). Readers must
       not update/delete variables or delete environments.
-- [ ] **P0 — Add member removal and "leave project".** `DELETE
+      (`members: [{user_id, role, environments}]`, uniform RBAC via `project/permissions.py`)
+- [x] **P0 — Add member removal and "leave project".** `DELETE
 /project/{id}/members/{user_id}` (owner only) and `DELETE
 /project/{id}/members/me`. Acceptance: revoked users lose access
       immediately; combine with token version/revocation if needed.
-- [ ] **P0 — Scope permissions per environment.** Decide whether prod is
+      (plus `PATCH /v1/project/{project_id}/members/{user_id}` to update env grants/role;
+      enforced from DB on every request)
+- [x] **P0 — Scope permissions per environment.** Decide whether prod is
       owner-only or role-gated. Enforce in `_get_environment_for_user` and the
       delete/update paths (`variable/service.py:34-84`,
       `environment/service.py:128-165`).
+      (explicit per-member env grants `environments: [env_id]`, no wildcard for members;
+      uniform RBAC, no env-name special-casing)
 - [x] **P1 — Stop returning the member ID list to every member.** Filter
       `ProjectModel.users` from `GET /project/` or return a minimal DTO
       (`project/models.py:18`, `project/service.py:106-126`).

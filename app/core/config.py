@@ -91,6 +91,8 @@ class Settings(BaseSettings):
     OTP_VERIFY_ATTEMPTS: int = 10  # wrong OTP guesses per user per OTP lifetime
     OTP_RESEND_LIMIT: int = 3  # OTP resends per user per OTP lifetime
 
+    INVITATION_EXPIRY_DAYS: int = 7
+
     # API docs (/docs, /redoc, /openapi.json); disabled by default.
     DOCS_ENABLED: bool = False
 

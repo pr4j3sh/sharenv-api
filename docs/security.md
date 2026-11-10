@@ -143,10 +143,11 @@ _Scenario: a token copied from the CLI keyring, process memory, logs, or a
 compromised client machine._
 
 - Gets: the full access of that user until the token is revoked or expires.
-- Can: list projects, read and decrypt every value in every project the user
-  belongs to, create/update/delete variables, delete environments, add members
-  to projects the user owns (with re-authentication), and delete projects the
-  user owns (with re-authentication).
+- Can: list projects and, subject to role and environment grants, read and
+  decrypt values in projects the user belongs to; writers can create/update/
+  delete variables and create/delete environments in their granted environments.
+  The owner can create invitations, manage member access, remove members, and
+  delete projects the user owns (all with re-authentication where required).
 - Cannot: change the account password (there is no endpoint), or use the token
   after `exp`, after logout, or after the user is deleted.
 - Sensitive owner actions (`PUT /v1/project/{id}` share, project deletion)
@@ -165,19 +166,27 @@ are not yet implemented. See `plan.md` §3.
 
 ### Malicious or curious project member
 
-_Scenario: the owner adds a user, or a member's account is taken over._
+_Scenario: the owner invites a user who accepts, or a member's account is
+taken over._
 
-- Gets: read access to every environment in the project.
-- Can: read and decrypt all values, create and update variables, delete
-  variables, and delete environments. Membership is currently a flat list with
-  no roles.
-- Cannot: add other members or delete the project; those are owner-only.
-- Cannot: read the member id list; `GET /v1/project/` returns only project
-  name, owner, and timestamps.
+- Gets: access to the project and only the environments explicitly granted to
+  that member.
+- Can: a **reader** can list/read values in granted environments; a **writer**
+  can additionally create/update/delete variables and create/delete environments
+  (scoped to granted environments). An owner has full control.
+- Cannot: non-owners cannot invite, change member access, remove members, or
+  delete the project. A member cannot access environments not granted to them.
+- Membership requires the invitee's consent (accepting a token as the matching,
+  verified user). The owner can remove a member, change their granted
+  environments/role, or the member can leave; access is enforced from DB
+  membership/grants on every request, so revocation and grant changes take
+  effect immediately. `GET /v1/project/` returns the caller's role but not the
+  member list.
 
-There is no invitation or consent step, no member removal endpoint, and no
-audit trail, so a member can silently exfiltrate values and the owner cannot
-revoke access. See `plan.md` §4.
+There is still no membership-change audit trail (see `plan.md` §4/§7). The
+invitation email (token) is delivered via the configured provider. Per-environment
+access is an explicit grant list (no wildcard for members); uniform RBAC applies
+(no special-casing by environment name).
 
 ### Compromised host or API process
 
@@ -264,7 +273,7 @@ writing.
 | No MFA/TOTP                                                                         | A stolen or guessed password alone is enough after verification                                       | §3     |
 | Auth rate limiting is in-memory and per-process                                      | Counters reset on restart and are not shared across uvicorn workers (nginx adds a coarse outer limit)  | §3, §9 |
 | Per-email login lockout is an account-availability DoS surface                       | An attacker can lock out any email address by sending failures                                        | §3     |
-| Flat membership: no roles, consent, or removal                                      | Any member can write and delete; owner can grant access silently                                      | §4     |
+| No membership-change audit trail                                                    | Limited attribution for invitations, role/grant changes, and removals                                  | §4, §7 |
 | Variable names are not validated                                                    | Newline/`=`/`#` injection into clients' `.env` files; AAD ambiguity                                   | §5     |
 | No unique indexes; `ObjectId` not validated                                         | Duplicate races; invalid ids return `500`                                                             | §5     |
 | `Cache-Control: no-store` only on `/v1/variable`                                    | Auth and project/environment responses may be cached                                                  | §6     |

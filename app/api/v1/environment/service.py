@@ -14,6 +14,7 @@ from app.api.v1.environment.schemas import (
     DeleteEnvironmentRes,
 )
 from app.api.v1.project.exceptions import ProjectNotFound
+from app.api.v1.project.permissions import resolve_access
 from app.api.v1.variable.exceptions import DeleteVariableFailed
 from app.core.logger import get_logger
 from app.core.utils import get_current_time
@@ -34,14 +35,15 @@ class Environment:
         if self.db.environments is None or self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
 
-        project = await self.db.projects.find_one(
-            {
-                "_id": ObjectId(project_id),
-                "$or": [{"user_id": user_id}, {"users": user_id}],
-            }
-        )
+        project = await self.db.projects.find_one({"_id": ObjectId(project_id)})
         if not project:
             raise ProjectNotFound("Project does not exist")
+
+        access = resolve_access(project, user_id)
+        if access is None:
+            raise ProjectNotFound("Project does not exist")
+        if not access.can_write():
+            raise UnauthorizedAccess("Unauthorized Access")
 
         environment_exists = await self.db.environments.find_one(
             {"name": payload.name, "project_id": project_id}
@@ -68,6 +70,8 @@ class Environment:
         if not res or not res.inserted_id:
             raise CreateEnvironmentError("failed to create environment")
 
+        # Note: writer-created environments are not auto-granted; owner controls
+        # env access grants explicitly.
         return CreateEnvironmentRes(environment_id=str(res.inserted_id))
 
     async def get_environments(
@@ -79,24 +83,19 @@ class Environment:
             raise RuntimeError("mongodb is not connected")
 
         project = await self.db.projects.find_one({"_id": ObjectId(project_id)})
-
         if not project:
             raise ProjectNotFound("Project does not exist")
 
-        user_exists = await self.db.projects.find_one(
-            {
-                "_id": ObjectId(project_id),
-                "$or": [
-                    {"user_id": user_id},
-                    {"users": user_id},
-                ],
-            }
-        )
-
-        if not user_exists:
+        access = resolve_access(project, user_id)
+        if access is None:
             raise UnauthorizedAccess("Unauthorized Access")
 
-        query = {"project_id": project_id}
+        query: dict = {"project_id": project_id}
+
+        if access.environments is not None:
+            if not access.environments:
+                return []
+            query["_id"] = {"$in": [ObjectId(eid) for eid in access.environments]}
 
         if environment_name is not None:
             query["name"] = environment_name
@@ -125,12 +124,15 @@ class Environment:
             raise EnvironmentNotFound("environment does not exist")
 
         project = await self.db.projects.find_one(
-            {
-                "_id": ObjectId(environment["project_id"]),
-                "$or": [{"user_id": user_id}, {"users": user_id}],
-            }
+            {"_id": ObjectId(environment["project_id"])}
         )
         if not project:
+            raise UnauthorizedAccess("Unauthorized Access")
+
+        access = resolve_access(project, user_id)
+        if access is None or not access.can_access_env(environment_id):
+            raise UnauthorizedAccess("Unauthorized Access")
+        if not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")
 
         res = await self.db.variables.delete_many({"environment_id": environment_id})
@@ -165,18 +167,21 @@ class Environment:
         if not environment:
             raise EnvironmentNotFound("environment does not exist")
 
+        environment_id = str(environment["_id"])
+
         project = await self.db.projects.find_one(
-            {
-                "_id": ObjectId(environment["project_id"]),
-                "$or": [{"user_id": user_id}, {"users": user_id}],
-            }
+            {"_id": ObjectId(environment["project_id"])}
         )
         if not project:
             raise UnauthorizedAccess("Unauthorized Access")
 
-        res = await self.db.variables.delete_many(
-            {"environment_id": str(environment["_id"])}
-        )
+        access = resolve_access(project, user_id)
+        if access is None or not access.can_access_env(environment_id):
+            raise UnauthorizedAccess("Unauthorized Access")
+        if not access.can_write():
+            raise UnauthorizedAccess("Unauthorized Access")
+
+        res = await self.db.variables.delete_many({"environment_id": environment_id})
         if not res.acknowledged:
             raise DeleteVariableFailed(
                 "Failed to delete variables for this envrionment"
@@ -187,4 +192,4 @@ class Environment:
         if not res.acknowledged:
             raise DeleteEnvironmentFailed("Failed to delete environment")
 
-        return DeleteEnvironmentRes(environment_id=str(environment["_id"]))
+        return DeleteEnvironmentRes(environment_id=environment_id)

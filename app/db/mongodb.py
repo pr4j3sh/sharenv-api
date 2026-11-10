@@ -31,6 +31,7 @@ class MongoClient:
         self.projects: AsyncCollection | None = None
         self.environments: AsyncCollection | None = None
         self.variables: AsyncCollection | None = None
+        self.invitations: AsyncCollection | None = None
 
     async def connect(self, payload: MongoConnectPayload | None = None) -> None:
         uri = payload.uri if payload and payload.uri else self._uri
@@ -47,6 +48,7 @@ class MongoClient:
             self.projects = self.db["projects"]
             self.environments = self.db["environments"]
             self.variables = self.db["variables"]
+            self.invitations = self.db["invitations"]
 
             log.info(f"connected to mongodb {database} successfully")
 
@@ -65,6 +67,7 @@ class MongoClient:
         self.projects = None
         self.environments = None
         self.variables = None
+        self.invitations = None
 
 
 mongo = MongoClient()

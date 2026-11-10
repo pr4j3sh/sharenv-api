@@ -21,16 +21,24 @@ def generate_otp() -> str:
     return "".join(secrets.choice(string.digits) for _ in range(length))
 
 
-def hash_otp(otp: str) -> str:
+def hash_secret(value: str) -> str:
     # HMAC keyed with JWT_SECRET acts as a server-side pepper: a database-only
     # attacker cannot verify guesses for the stored hash offline.
     return hmac.new(
-        settings.JWT_SECRET.encode(), otp.encode(), hashlib.sha256
+        settings.JWT_SECRET.encode(), value.encode(), hashlib.sha256
     ).hexdigest()
+
+
+def hash_otp(otp: str) -> str:
+    return hash_secret(otp)
 
 
 def verify_otp(stored_hash: str, otp: str) -> bool:
     return secrets.compare_digest(stored_hash, hash_otp(otp))
+
+
+def generate_invitation_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 def _master_cipher(key_version: int) -> AESGCM:

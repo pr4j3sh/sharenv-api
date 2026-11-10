@@ -1,11 +1,11 @@
 import re
 from datetime import datetime
+from typing import Literal
 
 from bson import ObjectId
 from pydantic import (
     BaseModel,
     ConfigDict,
-    EmailStr,
     Field,
     field_serializer,
     field_validator,
@@ -28,21 +28,6 @@ class CreateProjectReq(BaseModel):
 
 
 class CreateProjectRes(BaseModel):
-    project_id: str
-
-
-class AddUserReq(BaseModel):
-    email: EmailStr
-    # The caller's current password; sharing a project re-authenticates.
-    password: str
-
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, value: str) -> str:
-        return validate_password_size(value)
-
-
-class AddUserRes(BaseModel):
     project_id: str
 
 
@@ -69,6 +54,7 @@ class GetProjectsRes(BaseModel):
     id: ObjectId | None = Field(default=None, alias="_id")
     name: str
     user_id: str
+    role: Literal["owner", "writer", "reader"]
     created_at: datetime
     updated_at: datetime
 
@@ -79,3 +65,46 @@ class GetProjectsRes(BaseModel):
     @field_serializer("created_at", "updated_at")
     def serialize_datetime(self, value: datetime) -> str:
         return value.isoformat()
+
+
+class UpdateMemberAccessReq(BaseModel):
+    # Full replacement of the member's granted environment ids (add/remove by
+    # inclusion). Each id must belong to the project.
+    environments: list[str]
+    # Optionally adjust the member's role in the same request.
+    role: Literal["writer", "reader"] | None = None
+    # Owner re-authentication.
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_password_size(value)
+
+
+class UpdateMemberAccessRes(BaseModel):
+    project_id: str
+    user_id: str
+    role: Literal["writer", "reader"]
+    environments: list[str]
+
+
+class RemoveMemberReq(BaseModel):
+    # Owner re-authentication (required for removing another member).
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_password_size(value)
+
+
+class RemoveMemberRes(BaseModel):
+    project_id: str
+    user_id: str
+
+
+class LeaveProjectRes(BaseModel):
+    project_id: str
+    user_id: str
+
