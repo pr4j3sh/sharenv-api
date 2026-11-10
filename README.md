@@ -51,7 +51,7 @@ openssl rand -base64 32  # master key
 uv run fastapi dev
 ```
 
-> The server starts on `http://127.0.0.1:8000`. Browse API docs at <http://127.0.0.1:8000/docs>
+> The server starts on `http://127.0.0.1:8000`. If `DOCS_ENABLED` is `True`, API docs are at <http://127.0.0.1:8000/docs> (disabled by default in production/Docker configs).
 
 ## Security
 

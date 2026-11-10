@@ -12,3 +12,7 @@ class ProjectNotFound(Exception):
 
 class CannotAddSameUser(Exception):
     pass
+
+
+class ReauthenticationFailed(Exception):
+    pass

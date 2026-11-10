@@ -43,12 +43,22 @@ Account verification emails are sent through [Resend](https://resend.com):
 Optional tuning (defaults shown):
 
 ```env
-OTP_EXPIRY=10  # minutes before a verification OTP expires
-OTP_LENGTH=6   # digits in the OTP
+DOCS_ENABLED=False          # API docs (/docs, /redoc, /openapi.json)
+JWT_EXPIRY=15               # access token lifetime in minutes
+REFRESH_TOKEN_EXPIRY_DAYS=30
+OTP_EXPIRY=10               # minutes before a verification OTP expires
+OTP_LENGTH=6                # digits in the OTP
+AUTH_RATE_LIMIT_PER_IP=30   # requests/min across /v1/auth/*
+LOGIN_FAILURE_LIMIT=5       # failed logins per email before lockout
+LOGIN_LOCKOUT_MINUTES=15
+OTP_VERIFY_ATTEMPTS=10      # wrong OTP guesses per user per OTP lifetime
+OTP_RESEND_LIMIT=3          # OTP resends per user per OTP lifetime
 ```
 
 > Never enable `DEBUG` in production: it disables email delivery and logs
-> verification OTPs.
+> verification OTPs. Keep `DOCS_ENABLED` false in production unless you
+> intentionally expose the API schema. The API enforces in-memory auth rate
+> limits (single-process); nginx adds a coarse outer limit on `/v1/auth/`.
 
 ## 2. Start with HTTP
 

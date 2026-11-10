@@ -88,38 +88,49 @@ Current code: `app/api/v1/auth/*`, `app/core/security.py`,
 - [x] **P0 — Add a password policy.** Minimum length (>= 12), maximum length
       (e.g. 1024 bytes) to avoid Argon2 DoS, and reject obvious weak/breached
       passwords. Validate in `RegisterReq`/`LoginReq` (`auth/schemas.py`).
-- [ ] **P0 — Add rate limiting and lockout.** Per-IP and per-email limits on
+- [x] **P0 — Add rate limiting and lockout.** Per-IP and per-email limits on
       `/v1/auth/register` and `/v1/auth/login`. Prefer nginx `limit_req` plus an
       app-level counter. Acceptance: brute-force and password-spray tests are
       throttled.
+      (in-memory counters in `app/core/rate_limit.py`, also throttles OTP
+      verify/resend; nginx `limit_req` for `/v1/auth/` in `deploy/nginx/`)
 - [ ] **P1 — Add MFA/TOTP for accounts.** Optional at first, required for
       project owners. Document recovery codes.
-- [ ] **P0 — Stop leaking account existence.** Return the same `401` body and
+- [x] **P0 — Stop leaking account existence.** Return the same `401` body and
       timing for unknown email and wrong password (`auth/routes.py:48-74`,
       `auth/service.py:48-66`). Use a dummy hash when the user is missing.
       Remove the `404 UserNotFound` path. Also fix `add_user` returning `401
 UserNotFound` for an unknown email (`project/routes.py:82-107`).
+      (login returns identical 401 for unknown/wrong; `add_user` returns 404
+      for unknown target email)
 - [x] **P0 — Enforce a strong `JWT_SECRET`.** Reject secrets shorter than 32
       bytes / low entropy in `Settings.validate_jwt_secret`
       (`core/config.py:25-30`). Acceptance: startup fails for `secret`.
 - [x] **P0 — Allowlist the JWT algorithm.** Reject anything except
       `HS256/HS384/HS512` in config validation; never allow `none`.
-- [ ] **P0 — Add token revocation/logout.** Add `jti` to tokens and a
+- [x] **P0 — Add token revocation/logout.** Add `jti` to tokens and a
       revocation list (or per-user `token_version`) checked in
       `get_current_user_id`. Add `POST /v1/auth/logout`.
-- [ ] **P1 — Add refresh tokens or a shorter access token.** Keep access tokens
+      (`jti`/`ver`/`typ` claims, `users.token_version`, `POST /v1/auth/logout`)
+- [x] **P1 — Add refresh tokens or a shorter access token.** Keep access tokens
       short (e.g. 15 min) and add refresh rotation. Update the CLI accordingly.
-- [ ] **P1 — Add re-authentication for sensitive actions.** Require the current
+      (`JWT_EXPIRY` 15 min, `POST /v1/auth/refresh`, single-use rotated refresh
+      tokens; replay revokes the chain)
+- [x] **P1 — Add re-authentication for sensitive actions.** Require the current
       password (or a fresh token) for `PUT /project/{id}` (share), project
       deletion, and future member removal.
-- [ ] **P1 — Verify the user still exists on every request.** Check `users`
+      (password required on `PUT /v1/project/{id}` and project delete by id/name)
+- [x] **P1 — Verify the user still exists on every request.** Check `users`
       (or cache) in `get_current_user_id`, not only inside individual services.
       Acceptance: deleting a user invalidates access immediately.
-- [ ] **P2 — Disable `/docs` and `/openapi.json` in production** (or protect
-      them). Gate on `DEBUG` or a separate setting in `app/main.py`.
-- [ ] **P2 — Make missing/invalid tokens consistently return `401` with
+- [x] **P2 — Disable `/docs` and `/openapi.json` in production** (or protect
+      them). Gate on `DEBUG` or a separate setting in `app.main.py`.
+      (`DOCS_ENABLED`, default false)
+- [x] **P2 — Make missing/invalid tokens consistently return `401` with
       `WWW-Authenticate: Bearer`.** `HTTPBearer` may return `403` for a missing
       header; normalize it.
+      (verified: missing and invalid bearer tokens return `401` with
+      `WWW-Authenticate: Bearer`)
 
 ---
 

@@ -6,6 +6,7 @@ from app.api.v1.project.exceptions import (
     CreateProjectError,
     ProjectAlreadyExists,
     ProjectNotFound,
+    ReauthenticationFailed,
 )
 from app.api.v1.project.models import ProjectModel
 from app.api.v1.project.schemas import (
@@ -19,6 +20,7 @@ from app.api.v1.project.schemas import (
 from app.core.config import settings
 from app.core.crypto import get_data_key, wrap_data_key
 from app.core.logger import get_logger
+from app.core.security import verify_password
 from app.core.utils import get_current_time
 from app.db.mongodb import mongo
 
@@ -29,18 +31,29 @@ class Project:
     def __init__(self) -> None:
         self.db = mongo
 
+    async def _reauthenticate(self, user_id: str, password: str) -> None:
+        """Require the caller's current password for sensitive actions.
+
+        The dependency guarantees the user exists; the fetch is for the hash.
+        A missing user and a wrong password fail identically.
+        """
+        if self.db.users is None:
+            raise RuntimeError("mongodb is not connected")
+
+        user = await self.db.users.find_one({"_id": ObjectId(user_id)})
+
+        if not user or not user.get("password") or not verify_password(
+            password, user["password"]
+        ):
+            raise ReauthenticationFailed("re-authentication failed")
+
     async def create_project(
         self, user_id: str, payload: CreateProjectReq
     ) -> CreateProjectRes:
         log.info(f"creating project {user_id} {payload}")
 
-        if self.db.projects is None or self.db.users is None:
+        if self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
-
-        user = await self.db.users.find_one({"_id": ObjectId(user_id)})
-
-        if not user:
-            raise UserNotFound("User does not exist")
 
         project_exists = await self.db.projects.find_one(
             {"name": payload.name, "user_id": user_id}
@@ -76,15 +89,12 @@ class Project:
     async def add_user(
         self, user_id: str, project_id: str, payload: AddUserReq
     ) -> AddUserRes:
-        log.info(f"creating project {user_id} {project_id}")
+        log.info(f"adding user to project {user_id} {project_id}")
 
         if self.db.projects is None or self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
-        user_exists = await self.db.users.find_one({"_id": ObjectId(user_id)})
-
-        if not user_exists:
-            raise UserNotFound("User does not exist")
+        await self._reauthenticate(user_id, payload.password)
 
         project = await self.db.projects.find_one(
             {"_id": ObjectId(project_id), "user_id": user_id}
@@ -115,13 +125,8 @@ class Project:
     ) -> list[GetProjectsRes]:
         log.info(f"fetching projects {user_id}")
 
-        if self.db.projects is None or self.db.users is None:
+        if self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
-
-        user_exists = await self.db.users.find_one({"_id": ObjectId(user_id)})
-
-        if not user_exists:
-            raise UserNotFound("User does not exist")
 
         query: dict[str, list[dict[str, str]] | str] = {
             "$or": [{"user_id": user_id}, {"users": user_id}]
@@ -134,7 +139,9 @@ class Project:
 
         return [GetProjectsRes.model_validate(project) for project in projects]
 
-    async def delete_project(self, user_id: str, project_id: str) -> DeleteProjectRes:
+    async def delete_project(
+        self, user_id: str, project_id: str, password: str
+    ) -> DeleteProjectRes:
         log.info(f"deleting project {project_id}")
 
         if (
@@ -145,10 +152,7 @@ class Project:
         ):
             raise RuntimeError("mongodb is not connected")
 
-        user_exists = await self.db.users.find_one({"_id": ObjectId(user_id)})
-
-        if not user_exists:
-            raise UserNotFound("User does not exist")
+        await self._reauthenticate(user_id, password)
 
         project = await self.db.projects.find_one(
             {"_id": ObjectId(project_id), "user_id": user_id}
@@ -174,7 +178,7 @@ class Project:
         return DeleteProjectRes(project_id=project_id)
 
     async def delete_project_by_name(
-        self, user_id: str, project_name: str
+        self, user_id: str, project_name: str, password: str
     ) -> DeleteProjectRes:
         log.info(f"deleting project {project_name}")
 
@@ -186,10 +190,7 @@ class Project:
         ):
             raise RuntimeError("mongodb is not connected")
 
-        user_exists = await self.db.users.find_one({"_id": ObjectId(user_id)})
-
-        if not user_exists:
-            raise UserNotFound("User does not exist")
+        await self._reauthenticate(user_id, password)
 
         project = await self.db.projects.find_one(
             {"name": project_name, "user_id": user_id}

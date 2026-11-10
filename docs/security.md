@@ -142,18 +142,26 @@ authority.
 _Scenario: a token copied from the CLI keyring, process memory, logs, or a
 compromised client machine._
 
-- Gets: the full access of that user until the token expires.
+- Gets: the full access of that user until the token is revoked or expires.
 - Can: list projects, read and decrypt every value in every project the user
   belongs to, create/update/delete variables, delete environments, add members
-  to projects the user owns, and delete projects the user owns.
+  to projects the user owns (with re-authentication), and delete projects the
+  user owns (with re-authentication).
 - Cannot: change the account password (there is no endpoint), or use the token
-  after `exp`.
+  after `exp`, after logout, or after the user is deleted.
+- Sensitive owner actions (`PUT /v1/project/{id}` share, project deletion)
+  require the caller's current password in addition to a valid token.
 
-Current limitations: tokens are stateless, carry no `jti`, and cannot be
-revoked. The default lifetime is 60 minutes (`JWT_EXPIRY`). There is no logout
-endpoint and no refresh-token rotation. Deleting a user does not invalidate an
-already-issued token because `get_current_user_id` does not re-check the
-`users` collection. See `plan.md` §3.
+Current state: access tokens carry `jti`, `ver` (the user's `token_version`),
+and `typ: "access"`; refresh tokens carry `typ: "refresh"` and are
+single-use and rotated on `POST /v1/auth/refresh`. `get_current_user_id`
+decodes the token and re-checks the user and `token_version` on every request,
+so `POST /v1/auth/logout` (which bumps `token_version`), a refresh-token
+replay (which revokes the whole chain), and user deletion all invalidate
+issued tokens immediately. The default access-token lifetime is 15 minutes
+(`JWT_EXPIRY`); refresh tokens expire after 30 days
+(`REFRESH_TOKEN_EXPIRY_DAYS`). MFA/TOTP and per-token (jti-based) revocation
+are not yet implemented. See `plan.md` §3.
 
 ### Malicious or curious project member
 
@@ -252,18 +260,18 @@ writing.
 | Gap                                                                                 | Impact                                                                                                | Fix    |
 | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------ |
 | `JWT_SECRET` still lives in `.env`/container environment                             | `docker inspect` and `/proc/<pid>/environ` expose it                                                  | §9     |
-| Verification email depends on a third party (Resend); OTP endpoints are unthrottled | Provider compromise exposes OTPs; OTP brute force and email bombing                                   | §3     |
-| Login distinguishes unknown email (`404`) from wrong password (`401`)               | Account enumeration                                                                                   | §3     |
-| No rate limiting or lockout                                                         | Brute force and password spraying                                                                     | §3     |
-| No revocation, logout, or refresh tokens                                            | A stolen token works until expiry                                                                     | §3     |
+| Verification email depends on a third party (Resend)                                 | Provider compromise exposes recipient addresses and OTPs                                               | §3     |
+| No MFA/TOTP                                                                         | A stolen or guessed password alone is enough after verification                                       | §3     |
+| Auth rate limiting is in-memory and per-process                                      | Counters reset on restart and are not shared across uvicorn workers (nginx adds a coarse outer limit)  | §3, §9 |
+| Per-email login lockout is an account-availability DoS surface                       | An attacker can lock out any email address by sending failures                                        | §3     |
 | Flat membership: no roles, consent, or removal                                      | Any member can write and delete; owner can grant access silently                                      | §4     |
 | Variable names are not validated                                                    | Newline/`=`/`#` injection into clients' `.env` files; AAD ambiguity                                   | §5     |
 | No unique indexes; `ObjectId` not validated                                         | Duplicate races; invalid ids return `500`                                                             | §5     |
 | `Cache-Control: no-store` only on `/v1/variable`                                    | Auth and project/environment responses may be cached                                                  | §6     |
-| No audit log; emails and names are logged                                           | No detection or attribution; metadata leaks into logs                                                 | §7     |
+| No audit log; some PII/names still appear in logs                                   | Limited detection/attribution; metadata may leak into logs                                            | §7     |
 | Bundled MongoDB has no authentication or TLS                                        | Anyone who can reach it reads everything                                                              | §8     |
-| HTTP-only fallback; `Host`-based redirect; no HSTS or rate limit                    | Plaintext exposure and open redirect                                                                  | §9     |
-| Secrets may exist in git history; `.gitignore` is narrow                            | Key and token leakage through the repository                                                          | §10    |
+| HTTP-only fallback; `Host`-based redirect                                           | Plaintext exposure and open redirect                                                                  | §9     |
+| Secrets may exist in git history                                                    | Key and token leakage through the repository                                                          | §10    |
 | Backup handling is undocumented                                                     | Backups may be unprotected or unencrypted                                                             | §8     |
 
 ## Assumptions

@@ -40,3 +40,17 @@ class UserNotVerified(Exception):
 
 class ResendOtpError(Exception):
     pass
+
+
+class TooManyAttempts(Exception):
+    def __init__(self, retry_after: int) -> None:
+        self.retry_after = retry_after
+        super().__init__("too many attempts")
+
+
+class InvalidRefreshToken(Exception):
+    pass
+
+
+class LogoutError(Exception):
+    pass

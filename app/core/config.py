@@ -63,7 +63,9 @@ class Settings(BaseSettings):
 
     JWT_SECRET: str = ""
     JWT_ALGORITHM: Literal["HS256", "HS384", "HS512"] = "HS256"
-    JWT_EXPIRY: int = 60
+    JWT_EXPIRY: int = 15
+
+    REFRESH_TOKEN_EXPIRY_DAYS: int = 30
 
     # Master key registry: either inline JSON ({"<version>": "<base64 key>"})
     # or a path to a file containing the same JSON (e.g. a Docker secret).
@@ -80,6 +82,17 @@ class Settings(BaseSettings):
 
     OTP_EXPIRY: int = 10
     OTP_LENGTH: int = 6
+
+    # Auth rate limiting. The app-level counters are in-memory and
+    # single-process only; nginx adds a coarse outer limit (deploy/nginx/).
+    AUTH_RATE_LIMIT_PER_IP: int = 30  # requests per minute across /v1/auth/*
+    LOGIN_FAILURE_LIMIT: int = 5  # failed logins per email before lockout
+    LOGIN_LOCKOUT_MINUTES: int = 15
+    OTP_VERIFY_ATTEMPTS: int = 10  # wrong OTP guesses per user per OTP lifetime
+    OTP_RESEND_LIMIT: int = 3  # OTP resends per user per OTP lifetime
+
+    # API docs (/docs, /redoc, /openapi.json); disabled by default.
+    DOCS_ENABLED: bool = False
 
     MIN_PASSWORD_LENGTH: int = 12
     MAX_PASSWORD_BYTES: int = 1024

@@ -1,6 +1,6 @@
 from bson.objectid import ObjectId
 
-from app.api.v1.auth.exceptions import UnauthorizedAccess, UserNotFound
+from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import (
     CreateEnvironmentError,
     DeleteEnvironmentFailed,
@@ -31,17 +31,8 @@ class Environment:
     ) -> CreateEnvironmentRes:
         log.info(f"creating environment {project_id} {payload}")
 
-        if (
-            self.db.environments is None
-            or self.db.projects is None
-            or self.db.users is None
-        ):
+        if self.db.environments is None or self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
-
-        user = await self.db.users.find_one({"_id": ObjectId(user_id)})
-
-        if not user:
-            raise UserNotFound("User does not exist")
 
         project = await self.db.projects.find_one(
             {
@@ -84,17 +75,8 @@ class Environment:
     ) -> list[EnvironmentModel]:
         log.info(f"fetching environments {user_id} {project_id}")
 
-        if (
-            self.db.environments is None
-            or self.db.projects is None
-            or self.db.users is None
-        ):
+        if self.db.environments is None or self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
-
-        user = await self.db.users.find_one({"_id": ObjectId(user_id)})
-
-        if not user:
-            raise UserNotFound("User does not exist")
 
         project = await self.db.projects.find_one({"_id": ObjectId(project_id)})
 

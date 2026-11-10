@@ -34,6 +34,7 @@ class ResendOtpRes(BaseModel):
 
 class VerifyUserRes(BaseModel):
     token: str
+    refresh_token: str
 
 
 class LoginReq(BaseModel):
@@ -48,10 +49,24 @@ class LoginReq(BaseModel):
 
 class LoginRes(BaseModel):
     token: str
+    refresh_token: str
 
 
 class VerifyUserReq(BaseModel):
     otp: str
+
+
+class RefreshReq(BaseModel):
+    refresh_token: str
+
+
+class RefreshRes(BaseModel):
+    token: str
+    refresh_token: str
+
+
+class LogoutRes(BaseModel):
+    success: bool
 
 
 class EmailPayload(BaseModel):

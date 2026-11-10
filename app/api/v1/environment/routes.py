@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.api.v1.auth.exceptions import UnauthorizedAccess, UserNotFound
+from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import (
     CreateEnvironmentError,
     DeleteEnvironmentFailed,
@@ -36,11 +36,6 @@ async def get_environments(
         e = Environment()
         res = await e.get_environments(user_id, project_id, environment_name)
         return res
-    except UserNotFound as e:
-        raise HTTPException(
-            status_code=401,
-            detail=str(e),
-        ) from e
     except ProjectNotFound as e:
         raise HTTPException(
             status_code=401,

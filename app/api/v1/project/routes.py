@@ -4,15 +4,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.v1.auth.exceptions import UserNotFound
 from app.api.v1.project.exceptions import (
+    CannotAddSameUser,
     CreateProjectError,
     ProjectAlreadyExists,
     ProjectNotFound,
+    ReauthenticationFailed,
 )
 from app.api.v1.project.schemas import (
     AddUserReq,
     AddUserRes,
     CreateProjectReq,
     CreateProjectRes,
+    DeleteProjectReq,
     DeleteProjectRes,
     GetProjectsRes,
 )
@@ -34,11 +37,6 @@ async def get_projects(
         p = Project()
         res = await p.get_projects(user_id, project_name)
         return res
-    except UserNotFound as e:
-        raise HTTPException(
-            status_code=401,
-            detail=str(e),
-        ) from e
     except Exception as e:
         log.exception("fetching projects failed unexpectedly")
         raise HTTPException(
@@ -56,11 +54,6 @@ async def create_project(
         p = Project()
         res = await p.create_project(user_id, req)
         return res
-    except UserNotFound as e:
-        raise HTTPException(
-            status_code=401,
-            detail=str(e),
-        ) from e
     except ProjectAlreadyExists as e:
         raise HTTPException(
             status_code=409,
@@ -89,9 +82,19 @@ async def add_user(
         p = Project()
         res = await p.add_user(user_id, project_id, req)
         return res
+    except ReauthenticationFailed as e:
+        raise HTTPException(
+            status_code=403,
+            detail="re-authentication failed",
+        ) from e
     except UserNotFound as e:
         raise HTTPException(
-            status_code=401,
+            status_code=404,
+            detail=str(e),
+        ) from e
+    except CannotAddSameUser as e:
+        raise HTTPException(
+            status_code=400,
             detail=str(e),
         ) from e
     except ProjectNotFound as e:
@@ -110,16 +113,17 @@ async def add_user(
 @router.delete("/{project_id}", response_model=DeleteProjectRes)
 async def delete_project(
     project_id: str,
+    req: DeleteProjectReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
     try:
         p = Project()
-        res = await p.delete_project(user_id, project_id)
+        res = await p.delete_project(user_id, project_id, req.password)
         return res
-    except UserNotFound as e:
+    except ReauthenticationFailed as e:
         raise HTTPException(
-            status_code=401,
-            detail=str(e),
+            status_code=403,
+            detail="re-authentication failed",
         ) from e
     except ProjectNotFound as e:
         raise HTTPException(
@@ -137,16 +141,17 @@ async def delete_project(
 @router.delete("/name/{project_name}", response_model=DeleteProjectRes)
 async def delete_project_by_name(
     project_name: str,
+    req: DeleteProjectReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ):
     try:
         p = Project()
-        res = await p.delete_project_by_name(user_id, project_name)
+        res = await p.delete_project_by_name(user_id, project_name, req.password)
         return res
-    except UserNotFound as e:
+    except ReauthenticationFailed as e:
         raise HTTPException(
-            status_code=401,
-            detail=str(e),
+            status_code=403,
+            detail="re-authentication failed",
         ) from e
     except ProjectNotFound as e:
         raise HTTPException(

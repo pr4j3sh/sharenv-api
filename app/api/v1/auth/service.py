@@ -1,13 +1,17 @@
 from datetime import datetime, timedelta
 
-from bson import ObjectId
+from bson.errors import InvalidId
+from bson.objectid import ObjectId
 
 from app.api.v1.auth.exceptions import (
     CreateTokenError,
     InvalidCredentials,
+    InvalidRefreshToken,
+    LogoutError,
     RegisterError,
     ResendOtpError,
     SendEmailError,
+    TooManyAttempts,
     UserAlreadyExists,
     UserAlreadyVerified,
     UserNotFound,
@@ -19,6 +23,8 @@ from app.api.v1.auth.schemas import (
     EmailPayload,
     LoginReq,
     LoginRes,
+    LogoutRes,
+    RefreshRes,
     RegisterReq,
     RegisterRes,
     ResendOtpRes,
@@ -28,7 +34,15 @@ from app.core.config import settings
 from app.core.crypto import generate_otp, hash_otp, verify_otp
 from app.core.email import send_email
 from app.core.logger import get_logger
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.rate_limit import login_failures, otp_attempts, otp_resends
+from app.core.security import (
+    DUMMY_HASH,
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    hash_password,
+    verify_password,
+)
 from app.core.utils import get_current_time
 from app.db.mongodb import mongo
 
@@ -49,7 +63,8 @@ class Auth:
             log.exception("failed to roll back registration for %s", user_id)
 
     async def register(self, payload: RegisterReq) -> RegisterRes:
-        log.info(f"registering user {payload.email}")
+        # Hashed, not the raw address: emails must not appear in logs.
+        log.info("registering user %s", hash(payload.email.strip().lower()))
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
@@ -96,6 +111,15 @@ class Auth:
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
+        # Throttle OTP guessing per user id, independent of the source IP.
+        retry_after = await otp_attempts.locked(
+            f"otp:{user_id}",
+            settings.OTP_VERIFY_ATTEMPTS,
+            settings.OTP_EXPIRY * 60,
+        )
+        if retry_after:
+            raise TooManyAttempts(retry_after)
+
         user = await self.db.users.find_one({"_id": ObjectId(user_id)})
         if not user:
             raise UserNotFound("User does not exist")
@@ -115,27 +139,43 @@ class Auth:
             raise VerifyOtpError("otp expired")
 
         if not verify_otp(stored_otp, otp):
+            await otp_attempts.record(f"otp:{user_id}", settings.OTP_EXPIRY * 60)
             raise VerifyOtpError("failed to verify otp")
+
+        token_version = user.get("token_version", 0)
+        token = create_access_token(str(user["_id"]), token_version)
+        refresh_token, refresh_jti = create_refresh_token(
+            str(user["_id"]), token_version
+        )
 
         res = await self.db.users.update_one(
             {"_id": ObjectId(user_id)},
-            {"$set": {"is_verified": True}, "$unset": {"otp": "", "otp_expiry": ""}},
+            {
+                "$set": {"is_verified": True, "refresh_jti": refresh_jti},
+                "$unset": {"otp": "", "otp_expiry": ""},
+            },
         )
         if not res.acknowledged:
             raise VerifyOtpError("failed to verify user")
 
-        token = create_access_token(str(user["_id"]))
+        await otp_attempts.clear(f"otp:{user_id}")
 
-        if not token:
-            raise CreateTokenError("failed to create token")
-
-        return VerifyUserRes(token=token)
+        return VerifyUserRes(token=token, refresh_token=refresh_token)
 
     async def resent_otp(self, user_id: str) -> ResendOtpRes:
         log.info(f"resending otp for user {user_id}")
 
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
+
+        # Bound resends per user id to stop OTP email bombing.
+        retry_after = await otp_resends.allow(
+            f"resend:{user_id}",
+            settings.OTP_RESEND_LIMIT,
+            settings.OTP_EXPIRY * 60,
+        )
+        if retry_after:
+            raise TooManyAttempts(retry_after)
 
         user = await self.db.users.find_one({"_id": ObjectId(user_id)})
         if not user:
@@ -170,24 +210,129 @@ class Auth:
         return ResendOtpRes(success=True, user_id=str(user["_id"]))
 
     async def login(self, payload: LoginReq) -> LoginRes:
-        log.info(f"logging in user {payload.email}")
+        # Hashed, not the raw address: emails must not appear in logs.
+        log.info("logging in user %s", hash(payload.email.strip().lower()))
 
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
-        user = await self.db.users.find_one({"email": payload.email.strip().lower()})
-        if not user:
-            raise UserNotFound("User not found")
+        email = payload.email.strip().lower()
 
+        # Per-email lockout, checked before any account lookup so the lockout
+        # itself cannot be used to confirm an account exists.
+        retry_after = await login_failures.locked(
+            f"fail:{email}",
+            settings.LOGIN_FAILURE_LIMIT,
+            settings.LOGIN_LOCKOUT_MINUTES * 60,
+        )
+        if retry_after:
+            raise TooManyAttempts(retry_after)
+
+        user = await self.db.users.find_one({"email": email})
+
+        # Unknown email and wrong password must be indistinguishable: same
+        # status, same body, comparable timing (dummy Argon2 verify).
+        if not user:
+            verify_password(payload.password, DUMMY_HASH)
+            await login_failures.record(
+                f"fail:{email}", settings.LOGIN_LOCKOUT_MINUTES * 60
+            )
+            raise InvalidCredentials("invalid credentials")
+
+        if not verify_password(payload.password, user.get("password")):
+            await login_failures.record(
+                f"fail:{email}", settings.LOGIN_LOCKOUT_MINUTES * 60
+            )
+            raise InvalidCredentials("invalid credentials")
+
+        # Only revealed after a correct password, so it does not leak account
+        # existence to someone who does not know the credentials.
         if not user.get("is_verified"):
             raise UserNotVerified("User is unverified")
 
-        if not verify_password(payload.password, user.get("password")):
-            raise InvalidCredentials("invalid credentials")
+        token_version = user.get("token_version", 0)
+        token = create_access_token(str(user["_id"]), token_version)
+        refresh_token, refresh_jti = create_refresh_token(
+            str(user["_id"]), token_version
+        )
 
-        token = create_access_token(str(user.get("_id")))
-
-        if not token:
+        res = await self.db.users.update_one(
+            {"_id": user["_id"]}, {"$set": {"refresh_jti": refresh_jti}}
+        )
+        if not res.acknowledged:
             raise CreateTokenError("Failed to create token")
 
-        return LoginRes(token=token)
+        await login_failures.clear(f"fail:{email}")
+
+        return LoginRes(token=token, refresh_token=refresh_token)
+
+    async def refresh(self, refresh_token: str) -> RefreshRes:
+        log.info("refreshing token")
+
+        if self.db.users is None:
+            raise RuntimeError("mongodb is not connected")
+
+        try:
+            payload = decode_refresh_token(refresh_token)
+        except Exception as e:
+            raise InvalidRefreshToken("invalid refresh token") from e
+
+        user_id = payload.get("sub")
+        token_version = payload.get("ver")
+        jti = payload.get("jti")
+
+        try:
+            user_oid = ObjectId(user_id)
+        except (InvalidId, TypeError) as e:
+            raise InvalidRefreshToken("invalid refresh token") from e
+
+        user = await self.db.users.find_one({"_id": user_oid})
+        if not user or user.get("token_version", 0) != token_version:
+            raise InvalidRefreshToken("invalid refresh token")
+
+        # Single-use: the atomic swap below means only one concurrent use of a
+        # refresh token can win. A stale jti with a still-valid version means
+        # the token was replayed or raced, so revoke the whole chain.
+        if not token_version:
+            raise InvalidRefreshToken("invalid refresh token")
+
+        new_token = create_access_token(str(user_oid), token_version)
+        new_refresh_token, new_jti = create_refresh_token(str(user_oid), token_version)
+
+        res = await self.db.users.find_one_and_update(
+            {"_id": user_oid, "token_version": token_version, "refresh_jti": jti},
+            {"$set": {"refresh_jti": new_jti}},
+        )
+        if not res:
+            current = await self.db.users.find_one({"_id": user_oid})
+            if current and current.get("token_version", 0) == token_version:
+                await self.db.users.update_one(
+                    {"_id": user_oid},
+                    {
+                        "$inc": {"token_version": 1},
+                        "$unset": {"refresh_jti": ""},
+                    },
+                )
+            raise InvalidRefreshToken("invalid refresh token")
+
+        return RefreshRes(token=new_token, refresh_token=new_refresh_token)
+
+    async def logout(self, user_id: str) -> LogoutRes:
+        log.info("logging out user %s", user_id)
+
+        if self.db.users is None:
+            raise RuntimeError("mongodb is not connected")
+
+        # Revokes every access and refresh token issued for this user.
+        res = await self.db.users.update_one(
+            {"_id": ObjectId(user_id)},
+            {
+                "$inc": {"token_version": 1},
+                "$unset": {"refresh_jti": ""},
+            },
+        )
+
+        if not res.acknowledged:
+            raise LogoutError("Failed to log out")
+
+        return LogoutRes(success=True)

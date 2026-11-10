@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 
 from app.api.v1.router import router
+from app.core.config import settings
 from app.db.mongodb import mongo
 
 
@@ -15,7 +16,17 @@ async def startup(app: FastAPI):
         await mongo.close()
 
 
-app = FastAPI(title="sharenv API", lifespan=startup)
+# API docs are disabled unless DOCS_ENABLED is set, so production deployments
+# do not expose /docs, /redoc, or /openapi.json by default.
+app = FastAPI(
+    title="sharenv API",
+    lifespan=startup,
+    **(
+        {"docs_url": "/docs", "redoc_url": "/redoc", "openapi_url": "/openapi.json"}
+        if settings.DOCS_ENABLED
+        else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    ),
+)
 
 
 @app.middleware("http")

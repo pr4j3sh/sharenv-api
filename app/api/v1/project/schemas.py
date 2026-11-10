@@ -11,6 +11,8 @@ from pydantic import (
     field_validator,
 )
 
+from app.core.utils import validate_password_size
+
 
 class CreateProjectReq(BaseModel):
     name: str
@@ -31,10 +33,27 @@ class CreateProjectRes(BaseModel):
 
 class AddUserReq(BaseModel):
     email: EmailStr
+    # The caller's current password; sharing a project re-authenticates.
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_password_size(value)
 
 
 class AddUserRes(BaseModel):
     project_id: str
+
+
+class DeleteProjectReq(BaseModel):
+    # The caller's current password; deleting a project re-authenticates.
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_password_size(value)
 
 
 class DeleteProjectRes(BaseModel):
