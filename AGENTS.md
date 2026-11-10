@@ -4,7 +4,7 @@ FastAPI + async MongoDB (PyMongo `AsyncMongoClient`) API for managing projects, 
 
 ## Setup and commands
 
-- `cp .env.example .env`, then set `JWT_SECRET` (`openssl rand -hex 32`) and `ENCRYPTION_KEY` (`openssl rand -base64 32`, must decode to exactly 32 bytes). `settings` and `app/core/crypto.py` validate at import time, so bad values break every command, not just server startup.
+- `cp .env.example .env`, then set `JWT_SECRET` (`openssl rand -hex 32`) and a master key registry: `ENCRYPTION_KEYS_JSON={"1": "<openssl rand -base64 32>"}` (or `ENCRYPTION_KEYS_FILE` pointing at a JSON file). `ENCRYPTION_KEY_VERSION` is the active version. `settings` validates the registry at import time, so bad values break every command, not just server startup.
 - `uv sync` installs deps; `uv add <pkg>` updates `pyproject.toml` and `uv.lock`.
 - Run `uv run fastapi dev` from the repo root (`.env` is loaded relative to the current working directory); docs at `/docs`, health at `/health`.
 - A MongoDB instance must be reachable at `MONGO_URI`; the lifespan pings it and startup fails otherwise.
@@ -26,7 +26,7 @@ FastAPI + async MongoDB (PyMongo `AsyncMongoClient`) API for managing projects, 
 - Access model: `projects.user_id` is the owner and `projects.users` is a list of user-id strings added via `PUT /v1/project/{id}`. Read/create/delete checks use `{"$or": [{"user_id": user_id}, {"users": user_id}]}`; only the owner can add users. Variables resolve their environment and enforce the same project access.
 - Mongo documents use `_id: ObjectId`; Pydantic models alias it to `id` and serialize `id` and datetimes to strings. Insert with `model_dump(by_alias=True, exclude_none=True)` and read with `model_validate`. `UserModel` is the exception (plain email/password, no `_id` or timestamps).
 - Path IDs are converted with `ObjectId(...)` without validation, so a non-24-hex id raises `bson.errors.InvalidId` and surfaces as a 500.
-- Variable values are never stored in plaintext: `value_enc` is AES-GCM encrypted with AAD `"{environment_id}:{name}"`, plus `key_version`. Changing `ENCRYPTION_KEY`, or a variable's `name`/`environment_id`, without re-encrypting makes it undecryptable. There is no variable update endpoint.
+- Variable values are never stored in plaintext: `value_enc` is AES-GCM encrypted with the project's data key and an AAD of `[project_id, environment_id, name, key_version]` (JSON array). Each value and each project's wrapped key record their `key_version`, which must stay present in the master key registry. Changing a variable's `name`/`environment_id`/project, or removing its key version from the registry, without re-encrypting makes it undecryptable. Rotate master keys with `uv run python -m scripts.rotate_keys` (runbook: `docs/key-rotation.md`).
 - Collections are `None` until the lifespan connects; services guard with `if self.db.<collection> is None: raise RuntimeError(...)`. Query results use `.to_list(length=None)`.
 - JWTs use `sub` as the user id; `JWT_EXPIRY` is in minutes. Emails are trimmed and lowercased on register and login.
 - Project and environment `name` values must match `[a-z0-9_-]+`.

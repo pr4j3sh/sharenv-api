@@ -16,6 +16,7 @@ from app.api.v1.project.schemas import (
     DeleteProjectRes,
     GetProjectsRes,
 )
+from app.core.config import settings
 from app.core.crypto import get_data_key, wrap_data_key
 from app.core.logger import get_logger
 from app.core.utils import get_current_time
@@ -55,6 +56,7 @@ class Project:
             name=payload.name,
             user_id=user_id,
             data_key=wrapped_key,
+            key_version=settings.ENCRYPTION_KEY_VERSION,
             created_at=now,
             updated_at=now,
         )

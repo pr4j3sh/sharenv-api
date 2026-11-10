@@ -18,4 +18,7 @@ deploy/certs/*
 *.pem
 *.key
 
+# Master key registry (Docker secret source)
+deploy/secrets/
+
 

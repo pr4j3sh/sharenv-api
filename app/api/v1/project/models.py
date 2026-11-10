@@ -14,6 +14,7 @@ class ProjectModel(BaseModel):
     name: str
     user_id: str
     data_key: str
+    key_version: int
     created_at: datetime
     updated_at: datetime
     users: list[str] = []

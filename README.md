@@ -36,10 +36,14 @@ uv sync
 ```bash
 cp .env.example .env
 openssl rand -hex 32     # JWT_SECRET
-openssl rand -base64 32  # ENCRYPTION_KEY
+openssl rand -base64 32  # master key
 ```
 
-> Paste the generated values into `JWT_SECRET` and `ENCRYPTION_KEY` in `.env`. Also add `MONGO_URI`.
+> Paste the JWT value into `JWT_SECRET` in `.env`, and the master key into
+> `ENCRYPTION_KEYS_JSON` as version 1, e.g.
+> `ENCRYPTION_KEYS_JSON={"1": "<base64 key>"}`. Also add `MONGO_URI`.
+> `ENCRYPTION_KEY_VERSION` is the active key version; rotation is documented in
+> [docs/key-rotation.md](docs/key-rotation.md).
 
 - Run from the repository root so `.env` is loaded from the current working directory:
 

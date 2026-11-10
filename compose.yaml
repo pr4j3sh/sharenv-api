@@ -31,6 +31,8 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    secrets:
+      - encryption_keys
 
   mongo:
     image: mongo:8.0
@@ -60,3 +62,7 @@ services:
 
 volumes:
   mongo_data:
+
+secrets:
+  encryption_keys:
+    file: ./deploy/secrets/encryption_keys.json

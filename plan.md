@@ -43,28 +43,33 @@ Current code: `app/core/crypto.py`, `app/api/v1/variable/service.py`,
       wrapped key on the project document. Encrypt variable values with the
       project data key. Acceptance: a leaked single project key cannot decrypt
       another project.
-- [ ] **P0 — Implement a real key-version registry.** Replace the single
+- [x] **P0 — Implement a real key-version registry.** Replace the single
       module-global `_key` with a map `{version: AESGCM}` loaded from config.
       `encrypt_value` writes the active version; `decrypt_value` takes
       `key_version` and selects the right key. Acceptance: old values remain
       readable after rotating `ENCRYPTION_KEY`.
-- [ ] **P0 — Add a re-encryption/migration command.** A script or management
+      (registry in `app/core/config.py` — `ENCRYPTION_KEYS_JSON`/`ENCRYPTION_KEYS_FILE`)
+- [x] **P0 — Add a re-encryption/migration command.** A script or management
       endpoint that walks variables and re-encrypts with the active key version.
       Acceptance: documented runbook for rotation; idempotent; resumable.
-- [ ] **P0 — Bind key version into the AAD.** Change `_aad` to include
+      (`scripts/rotate_keys.py`, `docs/key-rotation.md`)
+- [x] **P0 — Bind key version into the AAD.** Change `_aad` to include
       `key_version` (and ideally `project_id`) so a ciphertext cannot be
       re-labelled with a different version/project. Plan a migration because
       this changes existing ciphertext.
-- [ ] **P0 — Store the master key outside the repo/host config.** Use Docker
+      (`app/core/crypto.py` — AAD is a JSON array of `[project_id, environment_id, name, key_version]`)
+- [x] **P0 — Store the master key outside the repo/host config.** Use Docker
       secrets or an external KMS. Do not put `ENCRYPTION_KEY` in `.env` next to
       `MONGO_URI`. Acceptance: `docker inspect` does not expose the key.
+      (compose `secrets:` → `/run/secrets/encryption_keys`; `JWT_SECRET` still §9)
 - [x] **P1 — Add per-variable error isolation.** `get_variables` should skip or
       report a single undecryptable variable instead of failing the whole
       environment (`variable/service.py:138-151`). Return a structured error or
       an `undecryptable` flag.
-- [ ] **P1 — Define crypto-shredding.** Decide whether deleting a project
+- [x] **P1 — Define crypto-shredding.** Decide whether deleting a project
       destroys its wrapped data key. Document that Mongo backups/oplog may still
       contain ciphertext.
+      (`docs/security.md` — Crypto-shredding section)
 - [ ] **P1 — Add crypto tests.** Nonce uniqueness, tamper detection (flip a
       ciphertext byte), AAD mismatch (wrong name/env), wrong key version,
       rotation round-trip.

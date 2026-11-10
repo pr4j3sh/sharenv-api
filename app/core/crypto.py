@@ -10,6 +10,11 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from app.core.config import settings
 
+# Master key ciphers by version, built once from the configured registry.
+# ENCRYPTION_KEY_VERSION is the active version used for new writes; older
+# versions stay configured so existing wrapped keys remain decryptable.
+_master_ciphers: dict[int, AESGCM] | None = None
+
 
 def generate_otp() -> str:
     length = settings.OTP_LENGTH
@@ -28,8 +33,20 @@ def verify_otp(stored_hash: str, otp: str) -> bool:
     return secrets.compare_digest(stored_hash, hash_otp(otp))
 
 
-def get_master_key() -> bytes:
-    return base64.b64decode(settings.ENCRYPTION_KEY, validate=True)
+def _master_cipher(key_version: int) -> AESGCM:
+    global _master_ciphers
+
+    if _master_ciphers is None:
+        _master_ciphers = {
+            version: AESGCM(key)
+            for version, key in settings.encryption_keys().items()
+        }
+
+    cipher = _master_ciphers.get(key_version)
+    if cipher is None:
+        raise ValueError(f"key version {key_version} is not in the key registry")
+
+    return cipher
 
 
 def get_data_key() -> bytes:
@@ -37,10 +54,9 @@ def get_data_key() -> bytes:
 
 
 def wrap_data_key(data_key: bytes) -> str:
-    master_key = get_master_key()
     nonce = os.urandom(settings.NONCE_SIZE)
 
-    ciphertext = AESGCM(master_key).encrypt(
+    ciphertext = _master_cipher(settings.ENCRYPTION_KEY_VERSION).encrypt(
         nonce,
         data_key,
         settings.KEY_INFO.encode(),
@@ -49,29 +65,36 @@ def wrap_data_key(data_key: bytes) -> str:
     return base64.b64encode(nonce + ciphertext).decode()
 
 
-def unwrap_data_key(wrapped_key: str) -> bytes:
-    master_key = get_master_key()
+def unwrap_data_key(wrapped_key: str, key_version: int) -> bytes:
     raw = base64.b64decode(wrapped_key, validate=True)
 
     if len(raw) <= settings.NONCE_SIZE:
         raise ValueError("invalid wrapped data key")
 
-    return AESGCM(master_key).decrypt(
+    return _master_cipher(key_version).decrypt(
         raw[: settings.NONCE_SIZE],
         raw[settings.NONCE_SIZE :],
         settings.KEY_INFO.encode(),
     )
 
 
-def _aad(environment_id: str, name: str) -> bytes:
-    return f"{environment_id}:{name}".encode()
+def _aad(project_id: str, environment_id: str, name: str, key_version: int) -> bytes:
+    # JSON array, not a delimiter-joined string, so a name containing ":"
+    # cannot shift fields, and so a ciphertext cannot be re-labelled with a
+    # different project or key version.
+    return json.dumps(
+        [project_id, environment_id, name, key_version],
+        separators=(",", ":"),
+    ).encode()
 
 
 def encrypt_value(
     value: str | int | bool,
     data_key: bytes,
+    project_id: str,
     environment_id: str,
     name: str,
+    key_version: int,
 ) -> str:
     nonce = os.urandom(settings.NONCE_SIZE)
     plaintext = json.dumps(value).encode()
@@ -79,7 +102,7 @@ def encrypt_value(
     ciphertext = AESGCM(data_key).encrypt(
         nonce,
         plaintext,
-        _aad(environment_id, name),
+        _aad(project_id, environment_id, name, key_version),
     )
 
     return base64.b64encode(nonce + ciphertext).decode()
@@ -88,8 +111,10 @@ def encrypt_value(
 def decrypt_value(
     blob: str,
     data_key: bytes,
+    project_id: str,
     environment_id: str,
     name: str,
+    key_version: int,
 ) -> str | int | bool:
     raw = base64.b64decode(blob, validate=True)
 
@@ -99,7 +124,7 @@ def decrypt_value(
     plaintext = AESGCM(data_key).decrypt(
         raw[: settings.NONCE_SIZE],
         raw[settings.NONCE_SIZE :],
-        _aad(environment_id, name),
+        _aad(project_id, environment_id, name, key_version),
     )
 
     return json.loads(plaintext)

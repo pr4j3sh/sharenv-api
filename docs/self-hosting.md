@@ -14,10 +14,25 @@ This guide deploys sharenv-api with Docker Compose, MongoDB, and nginx. nginx se
 ```bash
 cp .env.docker.example .env.docker
 openssl rand -hex 32     # JWT_SECRET
-openssl rand -base64 32  # ENCRYPTION_KEY
+openssl rand -base64 32  # master key
 ```
 
-> Put the generated values into `JWT_SECRET` and `ENCRYPTION_KEY` in `.env.docker`.
+> Put the JWT value into `JWT_SECRET` in `.env.docker`.
+
+Create the master key registry — a JSON object mapping key versions to keys.
+Compose mounts it into the API container as a Docker secret, so the master key
+never appears in `.env.docker` or in `docker inspect` output:
+
+```bash
+mkdir -p deploy/secrets
+umask 077
+printf '{"1": "%s"}\n' "$(openssl rand -base64 32)" > deploy/secrets/encryption_keys.json
+```
+
+> `deploy/secrets/` is gitignored. `ENCRYPTION_KEYS_FILE` in `.env.docker`
+> already points at the in-container path `/run/secrets/encryption_keys`, and
+> `ENCRYPTION_KEY_VERSION=1` marks that key active. Rotating the master key is
+> documented in [docs/key-rotation.md](key-rotation.md).
 
 Account verification emails are sent through [Resend](https://resend.com):
 

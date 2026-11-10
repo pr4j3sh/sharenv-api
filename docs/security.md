@@ -24,9 +24,9 @@ End-to-end encryption (client-held per-project keys, opaque blobs in the API)
 is not implemented. Moving to it would require a CLI-side key store and an
 out-of-band key distribution design for sharing, and would make server-side
 validation of values impossible. The current design keeps server-side
-encryption with per-project data keys wrapped by a single master key (the
-remaining rotation work is tracked in `plan.md` §2), not to claim E2E
-properties the system does not have.
+encryption with per-project data keys wrapped by versioned master keys (see
+`docs/key-rotation.md` for the rotation runbook), not to claim E2E properties
+the system does not have.
 
 Do not describe this system as "zero-knowledge", "end-to-end encrypted", or
 "the server cannot read your secrets".
@@ -57,7 +57,7 @@ There is no key material in the CLI. All key material is held by the server.
 | ---------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | **Secret**             | Variable values                                                                   | AES-256-GCM ciphertext (`value_enc`)                                                                                        | Any member of the project, the API process, the operator, host root |
 | **Sensitive metadata** | Variable names, environment names, project names, member user IDs, account emails | Plaintext                                                                                                                   | The same parties as secrets, plus anyone with database access       |
-| **Credentials**        | Password hashes, HMAC-hashed verification OTPs, `JWT_SECRET`, `ENCRYPTION_KEY`    | Argon2id password hashes and peppered OTP hashes in `users`; keys outside the database (`.env`/container environment today) | The API process and host root; never returned by the API            |
+| **Credentials**        | Password hashes, HMAC-hashed verification OTPs, `JWT_SECRET`, master encryption keys (`ENCRYPTION_KEYS_JSON`/`ENCRYPTION_KEYS_FILE`) | Argon2id password hashes and peppered OTP hashes in `users`; keys outside the database — the master key registry is a Docker secret file (`deploy/secrets/encryption_keys.json`), `JWT_SECRET` is still a container environment variable | The API process and host root; never returned by the API            |
 | **Operational**        | ObjectIds, timestamps, `key_version`, record sizes                                | Plaintext                                                                                                                   | Anyone with database access                                         |
 
 Decisions recorded here:
@@ -76,9 +76,14 @@ Decisions recorded here:
   attempt offline guessing against them; weak or reused passwords will fall.
 - **Keys are never stored in the database in usable form.** Each project has a
   random data key used to encrypt its variable values; it is stored in
-  `projects.data_key` wrapped (encrypted) under the master `ENCRYPTION_KEY`.
-  `ENCRYPTION_KEY` and `JWT_SECRET` are loaded from configuration (`.env` or
-  the container environment) today. See the gaps table.
+  `projects.data_key` wrapped (encrypted) under a master key, together with
+  the master key version that wrapped it (`projects.key_version`). The master
+  key registry maps versions to keys and is configured through
+  `ENCRYPTION_KEYS_JSON` (inline, local development) or
+  `ENCRYPTION_KEYS_FILE` (a Docker secret in the compose deployment);
+  `ENCRYPTION_KEY_VERSION` selects the active version used for new writes.
+  `JWT_SECRET` is loaded from the container environment today. See the gaps
+  table.
 - **Verification OTPs are peppered, not plaintext.** Account verification
   codes are stored as HMAC-SHA256 keyed with `JWT_SECRET`, so a database-only
   attacker cannot use them to verify accounts. They are short-lived (10
@@ -101,7 +106,7 @@ The API cannot:
 
 - protect values from itself, its operator, or host root;
 - prevent a member who is allowed to read a value from copying it;
-- recover values if `ENCRYPTION_KEY` is lost (there is no key escrow);
+- recover values if the master key registry is lost (there is no key escrow);
 - detect that the database was rolled back to an older snapshot;
 - prove to a client that a returned value is the one that was stored.
 
@@ -119,14 +124,17 @@ compromised database host._
   password guessing; delete or modify records if the access is writable;
   replay an existing ciphertext into a record with the same AAD; restore an
   old snapshot.
-- Cannot: decrypt values without `ENCRYPTION_KEY`, which is not stored in the
+- Cannot: decrypt values without a master key, which is not stored in the
   database; forge a new valid ciphertext without the key; recover a password
   that resists Argon2id guessing; verify an account with a stolen OTP hash
   because it is peppered with a server-side secret.
 
-Limits: AES-GCM authenticates each record, but the AAD currently binds only
-`environment_id:name`. A ciphertext can be moved between records that share
-both, and `key_version` is not authenticated. The database is not an integrity
+Limits: AES-GCM authenticates each record with an AAD binding
+`project_id`, `environment_id`, `name`, and `key_version`, so a ciphertext
+cannot be moved between projects or relabelled with a different key version.
+It can still be replayed into a record that shares all four fields (for
+example after the original was deleted and re-created), and a database
+attacker can delete or corrupt records. The database is not an integrity
 authority.
 
 ### Stolen bearer token
@@ -168,7 +176,8 @@ revoke access. See `plan.md` §4.
 _Scenario: remote code execution in the API, a compromised container image, or
 root on the host._
 
-- Gets: `ENCRYPTION_KEY`, `JWT_SECRET`, MongoDB credentials, and the API code.
+- Gets: the master key registry, `JWT_SECRET`, MongoDB credentials, and the
+  API code.
 - Can: decrypt every value, mint tokens for any user, read plaintext from
   process memory, modify responses, and persist access.
 - Equals: full compromise of every secret in the deployment. Host root also
@@ -176,8 +185,28 @@ root on the host._
 
 Each project has its own data key, so a leaked single project key cannot
 decrypt another project's values. But there is no hardware-backed key
-boundary and no KMS: the master `ENCRYPTION_KEY` wraps every project key, so
-one leaked master key still decrypts every project.
+boundary and no KMS: the master key registry wraps every project key, so one
+leaked master key still decrypts every project it ever wrapped.
+
+## Crypto-shredding
+
+Deleting a project destroys its wrapped data key. `projects.data_key` lives on
+the project document, and project deletion (by id or by name) removes the
+variables, environments, and the project document itself, so nothing
+decryptable remains in the live database. This is the intended destruction
+property.
+
+Caveats:
+
+- MongoDB backups and the oplog can still contain both the ciphertext and the
+  wrapped data key, so deletion does not destroy those copies. Destroying old
+  backups' data requires rotating the master key (see
+  [docs/key-rotation.md](key-rotation.md)) and letting backups taken before the
+  rotation expire, because only the old master key can unwrap those wrapped
+  data keys.
+- Rotating a project's data key alone (re-wrapping under a fresh data key) is
+  not implemented; master key rotation re-encrypts under the same per-project
+  data key.
 
 ### Compromised client machine
 
@@ -204,7 +233,9 @@ _Scenario: an attacker on the path between the CLI and the API._
 Same access as the database-only attacker, plus the ability to restore old
 snapshots and read the oplog if it is enabled. Backups contain ciphertext and
 metadata; the key must be stored separately for backups to remain protected.
-Backup handling is not yet documented. See `plan.md` §2 and §8.
+What deletion destroys and what survives in backups is covered in
+[Crypto-shredding](#crypto-shredding); backup handling beyond that is not yet
+documented. See `plan.md` §8.
 
 ### Operator and insider
 
@@ -220,9 +251,7 @@ writing.
 
 | Gap                                                                                 | Impact                                                                                                | Fix    |
 | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------ |
-| Single master key version; `key_version` stored but unused on decrypt               | Master key rotation breaks existing values; no rotation runbook                                       | §2     |
-| AAD binds only `environment_id:name`                                                | Ciphertext can be relabelled or replayed between same-named records; key version is not authenticated | §2     |
-| Key and JWT secret live in `.env`/container environment                             | `docker inspect` and `/proc/<pid>/environ` expose them                                                | §2, §9 |
+| `JWT_SECRET` still lives in `.env`/container environment                             | `docker inspect` and `/proc/<pid>/environ` expose it                                                  | §9     |
 | Verification email depends on a third party (Resend); OTP endpoints are unthrottled | Provider compromise exposes OTPs; OTP brute force and email bombing                                   | §3     |
 | Login distinguishes unknown email (`404`) from wrong password (`401`)               | Account enumeration                                                                                   | §3     |
 | No rate limiting or lockout                                                         | Brute force and password spraying                                                                     | §3     |
@@ -235,7 +264,7 @@ writing.
 | Bundled MongoDB has no authentication or TLS                                        | Anyone who can reach it reads everything                                                              | §8     |
 | HTTP-only fallback; `Host`-based redirect; no HSTS or rate limit                    | Plaintext exposure and open redirect                                                                  | §9     |
 | Secrets may exist in git history; `.gitignore` is narrow                            | Key and token leakage through the repository                                                          | §10    |
-| Backup handling is undocumented                                                     | Backups may be unprotected or unencrypted                                                             | §2, §8 |
+| Backup handling is undocumented                                                     | Backups may be unprotected or unencrypted                                                             | §8     |
 
 ## Assumptions
 
@@ -263,6 +292,7 @@ placeholder secrets is enough.
 ## Related documents
 
 - `docs/security-review.md` — checklist for reviewing new routes.
+- `docs/key-rotation.md` — master key rotation runbook.
 - `docs/self-hosting.md` — deployment and TLS setup.
 - `plan.md` — remediation roadmap referenced throughout this document.
 - CLI trust model: <https://github.com/pr4j3sh/sharenv/blob/main/docs/security.md>.
