@@ -13,8 +13,6 @@ from app.api.v1.auth.exceptions import (
     SendEmailError,
     TooManyAttempts,
     UserAlreadyExists,
-    UserAlreadyVerified,
-    UserNotFound,
     UserNotVerified,
     VerifyOtpError,
 )
@@ -26,6 +24,7 @@ from app.api.v1.auth.schemas import (
     RefreshRes,
     RegisterReq,
     RegisterRes,
+    ResendOtpReq,
     ResendOtpRes,
     VerifyUserReq,
     VerifyUserRes,
@@ -34,7 +33,6 @@ from app.api.v1.auth.service import Auth
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
 from app.core.rate_limit import enforce_auth_ip_limit
-from app.core.validation import parse_object_id
 
 router = APIRouter(
     prefix="/auth",
@@ -161,29 +159,20 @@ async def logout(user_id: Annotated[str, Depends(get_current_user_id)]):
         ) from e
 
 
-@router.post("/verify/{user_id}", response_model=VerifyUserRes)
-async def verify_user(user_id: str, req: VerifyUserReq):
-    parse_object_id(user_id, label="user_id")
+@router.post("/verify", response_model=VerifyUserRes)
+async def verify_user(req: VerifyUserReq):
     try:
         a = Auth()
-        res = await a.verify_user(user_id, req.otp)
+        res = await a.verify_user(req.email, req.otp)
         return res
-    except UserNotFound as e:
-        raise HTTPException(
-            status_code=404,
-            detail=str(e),
-        ) from e
     except EmailNotConfigured as e:
         raise HTTPException(
             status_code=400,
             detail=str(e),
         ) from e
-    except UserAlreadyVerified as e:
-        raise HTTPException(
-            status_code=409,
-            detail=str(e),
-        ) from e
     except VerifyOtpError as e:
+        # Unknown email, wrong/expired OTP and already-verified accounts all
+        # land here as the same 401.
         raise HTTPException(
             status_code=401,
             detail=str(e),
@@ -203,26 +192,15 @@ async def verify_user(user_id: str, req: VerifyUserReq):
         ) from e
 
 
-@router.post("/resend/{user_id}", response_model=ResendOtpRes)
-async def resend_otp(user_id: str):
-    parse_object_id(user_id, label="user_id")
+@router.post("/resend", response_model=ResendOtpRes)
+async def resend_otp(req: ResendOtpReq):
     try:
         a = Auth()
-        res = await a.resent_otp(user_id)
+        res = await a.resent_otp(req.email)
         return res
-    except UserNotFound as e:
-        raise HTTPException(
-            status_code=404,
-            detail=str(e),
-        ) from e
     except EmailNotConfigured as e:
         raise HTTPException(
             status_code=400,
-            detail=str(e),
-        ) from e
-    except UserAlreadyVerified as e:
-        raise HTTPException(
-            status_code=409,
             detail=str(e),
         ) from e
     except ResendOtpError as e:

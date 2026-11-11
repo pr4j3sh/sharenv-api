@@ -37,6 +37,11 @@ def verify_otp(stored_hash: str, otp: str) -> bool:
     return secrets.compare_digest(stored_hash, hash_otp(otp))
 
 
+# Lets callers run an OTP comparison against a fixed throwaway hash when the
+# account does not exist, so timing does not reveal account existence.
+DUMMY_OTP_HASH = hash_otp(secrets.token_urlsafe(32))
+
+
 def generate_invitation_token() -> str:
     return secrets.token_urlsafe(32)
 

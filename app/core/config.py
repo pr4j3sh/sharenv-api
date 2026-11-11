@@ -103,8 +103,8 @@ class Settings(BaseSettings):
     AUTH_RATE_LIMIT_PER_IP: int = 30  # requests per minute across /v1/auth/*
     LOGIN_FAILURE_LIMIT: int = 5  # failed logins per email before lockout
     LOGIN_LOCKOUT_MINUTES: int = 15
-    OTP_VERIFY_ATTEMPTS: int = 10  # wrong OTP guesses per user per OTP lifetime
-    OTP_RESEND_LIMIT: int = 3  # OTP resends per user per OTP lifetime
+    OTP_VERIFY_ATTEMPTS: int = 10  # wrong OTP guesses per email per OTP lifetime
+    OTP_RESEND_LIMIT: int = 3  # OTP resends per email per OTP lifetime
 
     INVITATION_EXPIRY_DAYS: int = 7
 

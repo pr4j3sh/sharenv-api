@@ -30,10 +30,6 @@ class VerifyOtpError(Exception):
     pass
 
 
-class UserAlreadyVerified(Exception):
-    pass
-
-
 class UserNotVerified(Exception):
     pass
 

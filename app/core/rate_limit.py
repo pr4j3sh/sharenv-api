@@ -82,9 +82,9 @@ class SlidingWindowCounter:
 auth_ip_limits = SlidingWindowCounter()
 # Failed login attempts per email; cleared on successful login.
 login_failures = SlidingWindowCounter()
-# Wrong OTP guesses per user id; cleared on successful verification.
+# Wrong OTP guesses per email; cleared on successful verification.
 otp_attempts = SlidingWindowCounter()
-# OTP resends per user id.
+# OTP resends per email.
 otp_resends = SlidingWindowCounter()
 
 

@@ -15,8 +15,6 @@ from app.api.v1.auth.exceptions import (
     SendEmailError,
     TooManyAttempts,
     UserAlreadyExists,
-    UserAlreadyVerified,
-    UserNotFound,
     UserNotVerified,
     VerifyOtpError,
 )
@@ -33,7 +31,7 @@ from app.api.v1.auth.schemas import (
     VerifyUserRes,
 )
 from app.core.config import settings
-from app.core.crypto import generate_otp, hash_otp, verify_otp
+from app.core.crypto import DUMMY_OTP_HASH, generate_otp, hash_otp, verify_otp
 from app.core.email import send_email
 from app.core.logger import get_logger
 from app.core.rate_limit import login_failures, otp_attempts, otp_resends
@@ -119,12 +117,12 @@ class Auth:
 
         return RegisterRes(
             success=True,
-            user_id=str(user.inserted_id),
             verification_required=email_enabled,
         )
 
-    async def verify_user(self, user_id: str, otp: str) -> VerifyUserRes:
-        log.info(f"verifying user {user_id}")
+    async def verify_user(self, email: str, otp: str) -> VerifyUserRes:
+        # Hashed, not the raw address: emails must not appear in logs.
+        log.info("verifying user %s", hash(email.strip().lower()))
 
         if not settings.email_enabled:
             raise EmailNotConfigured("email provider is not configured")
@@ -132,21 +130,25 @@ class Auth:
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
-        # Throttle OTP guessing per user id, independent of the source IP.
+        email = email.strip().lower()
+
+        # Throttle OTP guessing per email, independent of the source IP.
         retry_after = await otp_attempts.locked(
-            f"otp:{user_id}",
+            f"otp:{email}",
             settings.OTP_VERIFY_ATTEMPTS,
             settings.OTP_EXPIRY * 60,
         )
         if retry_after:
             raise TooManyAttempts(retry_after)
 
-        user = await self.db.users.find_one({"_id": ObjectId(user_id)})
-        if not user:
-            raise UserNotFound("User does not exist")
+        user = await self.db.users.find_one({"email": email})
 
-        if user.get("is_verified"):
-            raise UserAlreadyVerified("User is already verified")
+        # Unknown email and already-verified accounts are indistinguishable
+        # from a wrong OTP: compare against a throwaway hash and fail.
+        if not user or user.get("is_verified"):
+            verify_otp(DUMMY_OTP_HASH, otp)
+            await otp_attempts.record(f"otp:{email}", settings.OTP_EXPIRY * 60)
+            raise VerifyOtpError("failed to verify otp")
 
         stored_otp = user.get("otp")
         otp_expiry = user.get("otp_expiry")
@@ -160,7 +162,7 @@ class Auth:
             raise VerifyOtpError("otp expired")
 
         if not verify_otp(stored_otp, otp):
-            await otp_attempts.record(f"otp:{user_id}", settings.OTP_EXPIRY * 60)
+            await otp_attempts.record(f"otp:{email}", settings.OTP_EXPIRY * 60)
             raise VerifyOtpError("failed to verify otp")
 
         token_version = user.get("token_version", 0)
@@ -170,7 +172,7 @@ class Auth:
         )
 
         res = await self.db.users.update_one(
-            {"_id": ObjectId(user_id)},
+            {"_id": user["_id"]},
             {
                 "$set": {"is_verified": True, "refresh_jti": refresh_jti},
                 "$unset": {"otp": "", "otp_expiry": ""},
@@ -179,12 +181,13 @@ class Auth:
         if not res.acknowledged:
             raise VerifyOtpError("failed to verify user")
 
-        await otp_attempts.clear(f"otp:{user_id}")
+        await otp_attempts.clear(f"otp:{email}")
 
         return VerifyUserRes(token=token, refresh_token=refresh_token)
 
-    async def resent_otp(self, user_id: str) -> ResendOtpRes:
-        log.info(f"resending otp for user {user_id}")
+    async def resent_otp(self, email: str) -> ResendOtpRes:
+        # Hashed, not the raw address: emails must not appear in logs.
+        log.info("resending otp for user %s", hash(email.strip().lower()))
 
         if not settings.email_enabled:
             raise EmailNotConfigured("email provider is not configured")
@@ -192,27 +195,29 @@ class Auth:
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
-        # Bound resends per user id to stop OTP email bombing.
+        email = email.strip().lower()
+
+        # Bound resends per email to stop OTP email bombing.
         retry_after = await otp_resends.allow(
-            f"resend:{user_id}",
+            f"resend:{email}",
             settings.OTP_RESEND_LIMIT,
             settings.OTP_EXPIRY * 60,
         )
         if retry_after:
             raise TooManyAttempts(retry_after)
 
-        user = await self.db.users.find_one({"_id": ObjectId(user_id)})
-        if not user:
-            raise UserNotFound("User does not exist")
+        user = await self.db.users.find_one({"email": email})
 
-        if user.get("is_verified"):
-            raise UserAlreadyVerified("User is already verified")
+        # Unknown and already-verified accounts are indistinguishable from a
+        # successful resend: no email is sent, but the response is identical.
+        if not user or user.get("is_verified"):
+            return ResendOtpRes(success=True)
 
         otp = generate_otp()
         now = get_current_time()
 
         res = await self.db.users.update_one(
-            {"_id": ObjectId(user_id)},
+            {"_id": user["_id"]},
             {
                 "$set": {
                     "otp": hash_otp(otp),
@@ -231,7 +236,7 @@ class Auth:
         if not res.get("id"):
             raise SendEmailError("Failed to send email")
 
-        return ResendOtpRes(success=True, user_id=str(user["_id"]))
+        return ResendOtpRes(success=True)
 
     async def login(self, payload: LoginReq) -> LoginRes:
         # Hashed, not the raw address: emails must not appear in logs.

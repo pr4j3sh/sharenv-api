@@ -118,8 +118,8 @@ OTP_LENGTH=6                # digits in the OTP
 AUTH_RATE_LIMIT_PER_IP=30   # requests/min across /v1/auth/*
 LOGIN_FAILURE_LIMIT=5       # failed logins per email before lockout
 LOGIN_LOCKOUT_MINUTES=15
-OTP_VERIFY_ATTEMPTS=10      # wrong OTP guesses per user per OTP lifetime
-OTP_RESEND_LIMIT=3          # OTP resends per user per OTP lifetime
+OTP_VERIFY_ATTEMPTS=10      # wrong OTP guesses per email per OTP lifetime
+OTP_RESEND_LIMIT=3          # OTP resends per email per OTP lifetime
 INVITATION_EXPIRY_DAYS=7    # days before a pending project invitation expires
 ```
 

@@ -25,15 +25,17 @@ class RegisterReq(BaseModel):
 
 class RegisterRes(BaseModel):
     success: bool
-    user_id: str
     # False when no mail provider is configured (EMAIL_PROVIDER=none):
     # the account is created unverified and verification is impossible.
     verification_required: bool = True
 
 
+class ResendOtpReq(BaseModel):
+    email: EmailStr = Field(max_length=MAX_EMAIL_LENGTH)
+
+
 class ResendOtpRes(BaseModel):
     success: bool
-    user_id: str
 
 
 class VerifyUserRes(BaseModel):
@@ -58,6 +60,7 @@ class LoginRes(BaseModel):
 
 
 class VerifyUserReq(BaseModel):
+    email: EmailStr = Field(max_length=MAX_EMAIL_LENGTH)
     otp: str = Field(min_length=1, max_length=MAX_OTP_LENGTH)
 
 
