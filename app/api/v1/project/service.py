@@ -20,6 +20,7 @@ from app.api.v1.project.schemas import (
     DeleteProjectRes,
     GetProjectsRes,
     LeaveProjectRes,
+    MemberRes,
     RemoveMemberRes,
     UpdateMemberAccessReq,
     UpdateMemberAccessRes,
@@ -233,6 +234,70 @@ class Project:
         await self.db.projects.delete_one({"_id": project["_id"], "user_id": user_id})
 
         return DeleteProjectRes(project_id=project_id)
+
+    async def list_members(
+        self, user_id: str, project_id: str
+    ) -> list[MemberRes]:
+        log.info(f"listing members for project {project_id}")
+
+        if self.db.users is None:
+            raise RuntimeError("mongodb is not connected")
+
+        # Owner-only; hidden as 404 for everyone else.
+        project = await self._get_project_for_owner(user_id, project_id)
+
+        member_docs = list(project.get("members", []))
+        member_ids = [project["user_id"]] + [m.get("user_id", "") for m in member_docs]
+        member_ids = [mid for mid in member_ids if mid]
+
+        email_by_id: dict[str, str] = {}
+        oids = []
+
+        for mid in member_ids:
+            try:
+                oids.append(ObjectId(mid))
+            except (InvalidId, TypeError):
+                continue
+
+        if oids:
+            users = await self.db.users.find({"_id": {"$in": oids}}).to_list(length=None)
+            email_by_id = {str(u["_id"]): u.get("email", "") for u in users}
+
+        # The owner has implicit access to every environment in the project.
+        all_env_ids: list[str] = []
+
+        if self.db.environments is not None:
+            environments = await self.db.environments.find({"project_id": project_id}).to_list(
+                length=None
+            )
+            all_env_ids = [str(e["_id"]) for e in environments]
+
+        owner_id = project["user_id"]
+        rows = [
+            MemberRes(
+                user_id=owner_id,
+                email=email_by_id.get(owner_id, ""),
+                role="owner",
+                environments=all_env_ids,
+            )
+        ]
+
+        for member in member_docs:
+            mid = member.get("user_id", "")
+
+            if not mid:
+                continue
+
+            rows.append(
+                MemberRes(
+                    user_id=mid,
+                    email=email_by_id.get(mid, ""),
+                    role=member.get("role", "reader"),
+                    environments=list(member.get("environments", [])),
+                )
+            )
+
+        return rows
 
     async def update_member_access(
         self, user_id: str, project_id: str, member_id: str, payload: UpdateMemberAccessReq

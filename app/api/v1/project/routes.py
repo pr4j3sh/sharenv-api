@@ -18,6 +18,7 @@ from app.api.v1.project.schemas import (
     DeleteProjectRes,
     GetProjectsRes,
     LeaveProjectRes,
+    MemberRes,
     RemoveMemberReq,
     RemoveMemberRes,
     UpdateMemberAccessReq,
@@ -86,6 +87,28 @@ async def create_project(
         ) from e
     except Exception as e:
         log.exception("creating project failed unexpectedly")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal Server Error",
+        ) from e
+
+
+@router.get("/{project_id}/members", response_model=list[MemberRes])
+async def list_members(
+    project_id: str,
+    user_id: Annotated[str, Depends(get_current_user_id)],
+):
+    parse_object_id(project_id, label="project_id")
+    try:
+        p = Project()
+        return await p.list_members(user_id, project_id)
+    except ProjectNotFound as e:
+        raise HTTPException(
+            status_code=404,
+            detail=str(e),
+        ) from e
+    except Exception as e:
+        log.exception("listing members failed unexpectedly")
         raise HTTPException(
             status_code=500,
             detail="Internal Server Error",

@@ -63,6 +63,16 @@ class GetProjectsRes(BaseModel):
         return value.isoformat()
 
 
+class MemberRes(BaseModel):
+    # Owner-only view of project membership. Email is resolved by joining the
+    # users collection; unknown (deleted) accounts are reported with an empty
+    # email rather than failing the whole list.
+    user_id: str
+    email: str
+    role: Literal["owner", "writer", "reader"]
+    environments: list[str] = Field(default_factory=list)
+
+
 class UpdateMemberAccessReq(BaseModel):
     # Full replacement of the member's granted environment ids (add/remove by
     # inclusion). Each id must belong to the project.
