@@ -50,8 +50,6 @@ class MongoClient:
             self.variables = self.db["variables"]
             self.invitations = self.db["invitations"]
 
-            # Data-integrity indexes (idempotent). DB is treated as temporary, so
-            # we do not migrate legacy duplicates here.
             await self.users.create_index("email", unique=True, name="uniq_users_email")
             await self.projects.create_index(
                 [("user_id", 1), ("name", 1)],
@@ -69,7 +67,7 @@ class MongoClient:
                 name="uniq_variables_environment_id_name",
             )
 
-            log.info(f"connected to mongodb {database} successfully")
+            log.info("connected to mongodb %s successfully", database)
 
         except Exception as e:
             log.error(e)

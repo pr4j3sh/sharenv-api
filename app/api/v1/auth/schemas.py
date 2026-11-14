@@ -2,7 +2,11 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.core.config import settings
 from app.core.utils import validate_password_size
-from app.core.validation import MAX_EMAIL_LENGTH, MAX_OTP_LENGTH, MAX_REFRESH_TOKEN_LENGTH
+from app.core.validation import (
+    MAX_EMAIL_LENGTH,
+    MAX_OTP_LENGTH,
+    MAX_REFRESH_TOKEN_LENGTH,
+)
 
 
 class RegisterReq(BaseModel):

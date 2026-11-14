@@ -1,4 +1,6 @@
+from collections.abc import Mapping
 from email.message import EmailMessage
+from typing import Any
 
 import aiosmtplib
 import resend
@@ -10,7 +12,7 @@ from app.core.logger import get_logger
 log = get_logger(__name__)
 
 
-async def _send_via_smtp(to: str, subject: str, html: str) -> dict:
+async def _send_via_smtp(to: str, subject: str, html: str) -> dict[str, str]:
     msg = EmailMessage()
     msg["From"] = settings.EMAIL_FROM
     msg["To"] = to
@@ -34,7 +36,9 @@ async def _send_via_smtp(to: str, subject: str, html: str) -> dict:
     return {"id": "smtp"}
 
 
-async def _deliver(to: str, subject: str, html: str, kind: str, secret: str) -> dict:
+async def _deliver(
+    to: str, subject: str, html: str, kind: str, secret: str
+) -> Mapping[str, Any]:
     provider = settings.EMAIL_PROVIDER
 
     if settings.DEBUG or provider == "console":
@@ -63,7 +67,7 @@ async def _deliver(to: str, subject: str, html: str, kind: str, secret: str) -> 
     raise RuntimeError("email provider is not configured (EMAIL_PROVIDER=none)")
 
 
-async def send_email(payload: EmailPayload):
+async def send_email(payload: EmailPayload) -> Mapping[str, Any]:
     return await _deliver(
         to=payload.to,
         subject=payload.subject,
@@ -73,7 +77,9 @@ async def send_email(payload: EmailPayload):
     )
 
 
-async def send_invitation_email(to: str, project_name: str, role: str, token: str):
+async def send_invitation_email(
+    to: str, project_name: str, role: str, token: str
+) -> Mapping[str, Any]:
     return await _deliver(
         to=to,
         subject=f"Invitation to join {project_name}",

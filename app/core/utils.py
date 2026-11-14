@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from app.core.config import settings
 
 
-def get_current_time():
+def get_current_time() -> datetime:
     return datetime.now(UTC)
 
 

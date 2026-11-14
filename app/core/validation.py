@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -89,8 +90,6 @@ def validate_project_env_name(value: str, *, kind: str) -> str:
 
 def validate_variable_value_size(value: Any) -> Any:
     # Values are JSON-serialized for encryption; bound the serialized size.
-    import json
-
     try:
         encoded = json.dumps(value).encode("utf-8")
     except (TypeError, ValueError) as e:

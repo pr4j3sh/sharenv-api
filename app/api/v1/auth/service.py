@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
+from bson import ObjectId
 from bson.errors import InvalidId
-from bson.objectid import ObjectId
 from pymongo.errors import DuplicateKeyError
 
 from app.api.v1.auth.exceptions import (
@@ -31,7 +31,13 @@ from app.api.v1.auth.schemas import (
     VerifyUserRes,
 )
 from app.core.config import settings
-from app.core.crypto import DUMMY_OTP_HASH, generate_otp, hash_otp, verify_otp
+from app.core.crypto import (
+    DUMMY_OTP_HASH,
+    generate_otp,
+    hash_otp,
+    hash_secret,
+    verify_otp,
+)
 from app.core.email import send_email
 from app.core.logger import get_logger
 from app.core.rate_limit import login_failures, otp_attempts, otp_resends
@@ -64,7 +70,7 @@ class Auth:
 
     async def register(self, payload: RegisterReq) -> RegisterRes:
         # Hashed, not the raw address: emails must not appear in logs.
-        log.info("registering user %s", hash(payload.email.strip().lower()))
+        log.info("registering user %s", hash_secret(payload.email.strip().lower())[:12])
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
@@ -85,9 +91,7 @@ class Auth:
             email=email,
             password=hash_password(payload.password),
             otp=hash_otp(otp) if otp else None,
-            otp_expiry=(
-                now + timedelta(minutes=settings.OTP_EXPIRY) if otp else None
-            ),
+            otp_expiry=(now + timedelta(minutes=settings.OTP_EXPIRY) if otp else None),
         )
 
         try:
@@ -122,7 +126,7 @@ class Auth:
 
     async def verify_user(self, email: str, otp: str) -> VerifyUserRes:
         # Hashed, not the raw address: emails must not appear in logs.
-        log.info("verifying user %s", hash(email.strip().lower()))
+        log.info("verifying user %s", hash_secret(email.strip().lower())[:12])
 
         if not settings.email_enabled:
             raise EmailNotConfigured("email provider is not configured")
@@ -185,9 +189,9 @@ class Auth:
 
         return VerifyUserRes(token=token, refresh_token=refresh_token)
 
-    async def resent_otp(self, email: str) -> ResendOtpRes:
+    async def resend_otp(self, email: str) -> ResendOtpRes:
         # Hashed, not the raw address: emails must not appear in logs.
-        log.info("resending otp for user %s", hash(email.strip().lower()))
+        log.info("resending otp for user %s", hash_secret(email.strip().lower())[:12])
 
         if not settings.email_enabled:
             raise EmailNotConfigured("email provider is not configured")
@@ -231,16 +235,16 @@ class Auth:
         if not res.acknowledged:
             raise ResendOtpError("failed to resend otp")
 
-        res = await send_email(payload=EmailPayload(to=user["email"], otp=otp))
+        email_result = await send_email(payload=EmailPayload(to=user["email"], otp=otp))
 
-        if not res.get("id"):
+        if not email_result.get("id"):
             raise SendEmailError("Failed to send email")
 
         return ResendOtpRes(success=True)
 
     async def login(self, payload: LoginReq) -> LoginRes:
         # Hashed, not the raw address: emails must not appear in logs.
-        log.info("logging in user %s", hash(payload.email.strip().lower()))
+        log.info("logging in user %s", hash_secret(payload.email.strip().lower())[:12])
 
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
+from bson import ObjectId
 from bson.errors import InvalidId
-from bson.objectid import ObjectId
 
 from app.api.v1.auth.exceptions import UserNotFound
 from app.api.v1.invitation.exceptions import (
@@ -23,14 +23,13 @@ from app.api.v1.invitation.schemas import (
 from app.api.v1.project.exceptions import (
     CannotModifyOwner,
     ProjectNotFound,
-    ReauthenticationFailed,
 )
+from app.api.v1.project.helpers import get_owned_project, reauthenticate_user
 from app.api.v1.project.permissions import resolve_access
 from app.core.config import settings
 from app.core.crypto import generate_invitation_token, hash_secret
 from app.core.email import send_invitation_email
 from app.core.logger import get_logger
-from app.core.security import verify_password
 from app.core.utils import get_current_time
 from app.db.mongodb import mongo
 
@@ -40,27 +39,6 @@ log = get_logger(__name__)
 class Invitation:
     def __init__(self) -> None:
         self.db = mongo
-
-    async def _reauthenticate(self, user_id: str, password: str) -> None:
-        if self.db.users is None:
-            raise RuntimeError("mongodb is not connected")
-
-        user = await self.db.users.find_one({"_id": ObjectId(user_id)})
-        if not user or not user.get("password") or not verify_password(
-            password, user["password"]
-        ):
-            raise ReauthenticationFailed("re-authentication failed")
-
-    async def _get_owned_project(self, user_id: str, project_id: str) -> dict:
-        if self.db.projects is None:
-            raise RuntimeError("mongodb is not connected")
-
-        project = await self.db.projects.find_one(
-            {"_id": ObjectId(project_id), "user_id": user_id}
-        )
-        if not project:
-            raise ProjectNotFound("project does not exist")
-        return project
 
     async def _validate_environments(
         self, project_id: str, environment_ids: list[str]
@@ -87,9 +65,7 @@ class Invitation:
         found_ids = {str(e["_id"]) for e in found}
         missing = [eid for eid in unique_ids if eid not in found_ids]
         if missing:
-            raise InvalidInvitationEnvironments(
-                "one or more environments do not exist"
-            )
+            raise InvalidInvitationEnvironments("one or more environments do not exist")
 
         return unique_ids
 
@@ -105,8 +81,8 @@ class Invitation:
         ):
             raise RuntimeError("mongodb is not connected")
 
-        await self._reauthenticate(user_id, payload.password)
-        project = await self._get_owned_project(user_id, project_id)
+        await reauthenticate_user(user_id, payload.password)
+        project = await get_owned_project(user_id, project_id)
 
         email = payload.email.strip().lower()
 
@@ -173,7 +149,9 @@ class Invitation:
                 )
                 email_sent = True
             except Exception:
-                log.exception("Failed to send invitation email; owner can share the token")
+                log.exception(
+                    "Failed to send invitation email; owner can share the token"
+                )
 
         return CreateInvitationRes(
             invitation_id=str(res.inserted_id),
@@ -194,7 +172,7 @@ class Invitation:
         if self.db.invitations is None:
             raise RuntimeError("mongodb is not connected")
 
-        await self._get_owned_project(user_id, project_id)
+        await get_owned_project(user_id, project_id)
 
         invitations = await self.db.invitations.find(
             {"project_id": project_id}
@@ -210,8 +188,8 @@ class Invitation:
         if self.db.invitations is None:
             raise RuntimeError("mongodb is not connected")
 
-        await self._reauthenticate(user_id, password)
-        await self._get_owned_project(user_id, project_id)
+        await reauthenticate_user(user_id, password)
+        await get_owned_project(user_id, project_id)
 
         try:
             inv_oid = ObjectId(invitation_id)
@@ -226,9 +204,7 @@ class Invitation:
 
         return CancelInvitationRes(invitation_id=invitation_id)
 
-    async def accept_invitation(
-        self, user_id: str, token: str
-    ) -> AcceptInvitationRes:
+    async def accept_invitation(self, user_id: str, token: str) -> AcceptInvitationRes:
         log.info("accepting invitation")
 
         if (

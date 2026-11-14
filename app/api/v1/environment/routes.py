@@ -21,8 +21,7 @@ from app.api.v1.project.exceptions import ProjectNotFound
 from app.api.v1.variable.exceptions import DeleteVariableFailed
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
-from app.core.pagination import set_pagination_headers
-from app.core.config import settings
+from app.core.pagination import PaginationDep, set_pagination_headers
 from app.core.validation import ensure_project_env_name, parse_object_id
 
 router = APIRouter(prefix="/environment", tags=["Environment"])
@@ -35,16 +34,18 @@ async def get_environments(
     project_id: str,
     response: Response,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    environment_name: str = Query(default=None),
-    limit: Annotated[int, Query(ge=1, le=settings.PAGINATION_MAX_LIMIT)] = settings.PAGINATION_DEFAULT_LIMIT,
-    offset: Annotated[int, Query(ge=0)] = 0,
-):
+    pagination: PaginationDep,
+    environment_name: str | None = Query(default=None),
+) -> list[EnvironmentModel]:
+    limit, offset = pagination.limit, pagination.offset
     parse_object_id(project_id, label="project_id")
     if environment_name is not None:
         ensure_project_env_name(environment_name, kind="Environment")
     try:
         e = Environment()
-        res, total = await e.get_environments(user_id, project_id, environment_name, limit, offset)
+        res, total = await e.get_environments(
+            user_id, project_id, environment_name, limit, offset
+        )
         set_pagination_headers(
             response, total=total, limit=limit, offset=offset, item_count=len(res)
         )
@@ -68,15 +69,15 @@ async def get_environments(
 
 
 @router.post("/{project_id}", response_model=CreateEnvironmentRes)
-async def create_environemnt(
+async def create_environment(
     project_id: str,
     req: CreateEnvironmentReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> CreateEnvironmentRes:
     parse_object_id(project_id, label="project_id")
     try:
         e = Environment()
-        res = await e.create_environemnt(user_id, project_id, req)
+        res = await e.create_environment(user_id, project_id, req)
         return res
     except ProjectNotFound as e:
         raise HTTPException(
@@ -112,11 +113,11 @@ async def create_environemnt(
 
 
 @router.delete("/{project_id}/{environment_name}", response_model=DeleteEnvironmentRes)
-async def delete_environemnt_by_name(
+async def delete_environment_by_name(
     project_id: str,
     environment_name: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> DeleteEnvironmentRes:
     parse_object_id(project_id, label="project_id")
     ensure_project_env_name(environment_name, kind="Environment")
     try:
@@ -152,10 +153,10 @@ async def delete_environemnt_by_name(
 
 
 @router.delete("/{environment_id}", response_model=DeleteEnvironmentRes)
-async def delete_environemnt(
+async def delete_environment(
     environment_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> DeleteEnvironmentRes:
     parse_object_id(environment_id, label="environment_id")
     try:
         e = Environment()

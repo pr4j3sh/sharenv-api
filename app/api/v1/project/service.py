@@ -1,17 +1,16 @@
+from bson import ObjectId
 from bson.errors import InvalidId
-from bson.objectid import ObjectId
 from pymongo.errors import DuplicateKeyError
 
 from app.api.v1.project.exceptions import (
     CannotModifyOwner,
     CreateProjectError,
-    ForbiddenAccess,
     MemberNotFound,
     ProjectAlreadyExists,
     ProjectNotFound,
     ProjectQuotaExceeded,
-    ReauthenticationFailed,
 )
+from app.api.v1.project.helpers import get_owned_project, reauthenticate_user
 from app.api.v1.project.models import ProjectModel
 from app.api.v1.project.permissions import resolve_access
 from app.api.v1.project.schemas import (
@@ -28,7 +27,6 @@ from app.api.v1.project.schemas import (
 from app.core.config import settings
 from app.core.crypto import get_data_key, wrap_data_key
 from app.core.logger import get_logger
-from app.core.security import verify_password
 from app.core.utils import get_current_time
 from app.db.mongodb import mongo
 
@@ -39,33 +37,10 @@ class Project:
     def __init__(self) -> None:
         self.db = mongo
 
-    async def _reauthenticate(self, user_id: str, password: str) -> None:
-        """Require the caller's current password for sensitive actions."""
-        if self.db.users is None:
-            raise RuntimeError("mongodb is not connected")
-
-        user = await self.db.users.find_one({"_id": ObjectId(user_id)})
-
-        if not user or not user.get("password") or not verify_password(
-            password, user["password"]
-        ):
-            raise ReauthenticationFailed("re-authentication failed")
-
-    async def _get_project_for_owner(self, user_id: str, project_id: str) -> dict:
-        if self.db.projects is None:
-            raise RuntimeError("mongodb is not connected")
-
-        project = await self.db.projects.find_one(
-            {"_id": ObjectId(project_id), "user_id": user_id}
-        )
-        if not project:
-            raise ProjectNotFound("project does not exist")
-        return project
-
     async def create_project(
         self, user_id: str, payload: CreateProjectReq
     ) -> CreateProjectRes:
-        log.info(f"creating project {user_id} {payload}")
+        log.info("creating project %s %s", user_id, payload)
 
         if self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
@@ -115,14 +90,12 @@ class Project:
         limit: int = settings.PAGINATION_DEFAULT_LIMIT,
         offset: int = 0,
     ) -> tuple[list[GetProjectsRes], int]:
-        log.info(f"fetching projects {user_id}")
+        log.info("fetching projects %s", user_id)
 
         if self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
 
-        query: dict = {
-            "$or": [{"user_id": user_id}, {"members.user_id": user_id}]
-        }
+        query: dict = {"$or": [{"user_id": user_id}, {"members.user_id": user_id}]}
 
         if project_name is not None:
             query["name"] = project_name
@@ -157,7 +130,7 @@ class Project:
     async def delete_project(
         self, user_id: str, project_id: str, password: str
     ) -> DeleteProjectRes:
-        log.info(f"deleting project {project_id}")
+        log.info("deleting project %s", project_id)
 
         if (
             self.db.projects is None
@@ -168,7 +141,7 @@ class Project:
         ):
             raise RuntimeError("mongodb is not connected")
 
-        await self._reauthenticate(user_id, password)
+        await reauthenticate_user(user_id, password)
 
         project = await self.db.projects.find_one(
             {"_id": ObjectId(project_id), "user_id": user_id}
@@ -197,7 +170,7 @@ class Project:
     async def delete_project_by_name(
         self, user_id: str, project_name: str, password: str
     ) -> DeleteProjectRes:
-        log.info(f"deleting project {project_name}")
+        log.info("deleting project %s", project_name)
 
         if (
             self.db.projects is None
@@ -208,7 +181,7 @@ class Project:
         ):
             raise RuntimeError("mongodb is not connected")
 
-        await self._reauthenticate(user_id, password)
+        await reauthenticate_user(user_id, password)
 
         project = await self.db.projects.find_one(
             {"name": project_name, "user_id": user_id}
@@ -235,16 +208,14 @@ class Project:
 
         return DeleteProjectRes(project_id=project_id)
 
-    async def list_members(
-        self, user_id: str, project_id: str
-    ) -> list[MemberRes]:
-        log.info(f"listing members for project {project_id}")
+    async def list_members(self, user_id: str, project_id: str) -> list[MemberRes]:
+        log.info("listing members for project %s", project_id)
 
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
         # Owner-only; hidden as 404 for everyone else.
-        project = await self._get_project_for_owner(user_id, project_id)
+        project = await get_owned_project(user_id, project_id)
 
         member_docs = list(project.get("members", []))
         member_ids = [project["user_id"]] + [m.get("user_id", "") for m in member_docs]
@@ -256,20 +227,22 @@ class Project:
         for mid in member_ids:
             try:
                 oids.append(ObjectId(mid))
-            except (InvalidId, TypeError):
+            except InvalidId, TypeError:
                 continue
 
         if oids:
-            users = await self.db.users.find({"_id": {"$in": oids}}).to_list(length=None)
+            users = await self.db.users.find({"_id": {"$in": oids}}).to_list(
+                length=None
+            )
             email_by_id = {str(u["_id"]): u.get("email", "") for u in users}
 
         # The owner has implicit access to every environment in the project.
         all_env_ids: list[str] = []
 
         if self.db.environments is not None:
-            environments = await self.db.environments.find({"project_id": project_id}).to_list(
-                length=None
-            )
+            environments = await self.db.environments.find(
+                {"project_id": project_id}
+            ).to_list(length=None)
             all_env_ids = [str(e["_id"]) for e in environments]
 
         owner_id = project["user_id"]
@@ -300,15 +273,19 @@ class Project:
         return rows
 
     async def update_member_access(
-        self, user_id: str, project_id: str, member_id: str, payload: UpdateMemberAccessReq
+        self,
+        user_id: str,
+        project_id: str,
+        member_id: str,
+        payload: UpdateMemberAccessReq,
     ) -> UpdateMemberAccessRes:
-        log.info(f"updating member access {project_id} {member_id}")
+        log.info("updating member access %s %s", project_id, member_id)
 
         if self.db.projects is None or self.db.environments is None:
             raise RuntimeError("mongodb is not connected")
 
-        await self._reauthenticate(user_id, payload.password)
-        project = await self._get_project_for_owner(user_id, project_id)
+        await reauthenticate_user(user_id, payload.password)
+        project = await get_owned_project(user_id, project_id)
 
         if member_id == project["user_id"]:
             raise CannotModifyOwner("cannot modify project owner")
@@ -353,13 +330,13 @@ class Project:
     async def remove_member(
         self, user_id: str, project_id: str, member_id: str, password: str
     ) -> RemoveMemberRes:
-        log.info(f"removing member {project_id} {member_id}")
+        log.info("removing member %s %s", project_id, member_id)
 
         if self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
 
-        await self._reauthenticate(user_id, password)
-        project = await self._get_project_for_owner(user_id, project_id)
+        await reauthenticate_user(user_id, password)
+        project = await get_owned_project(user_id, project_id)
 
         if member_id == project["user_id"]:
             raise CannotModifyOwner("cannot remove project owner")
@@ -377,7 +354,7 @@ class Project:
         return RemoveMemberRes(project_id=project_id, user_id=member_id)
 
     async def leave_project(self, user_id: str, project_id: str) -> LeaveProjectRes:
-        log.info(f"leaving project {project_id} {user_id}")
+        log.info("leaving project %s %s", project_id, user_id)
 
         if self.db.projects is None:
             raise RuntimeError("mongodb is not connected")

@@ -51,8 +51,7 @@ def _master_cipher(key_version: int) -> AESGCM:
 
     if _master_ciphers is None:
         _master_ciphers = {
-            version: AESGCM(key)
-            for version, key in settings.encryption_keys().items()
+            version: AESGCM(key) for version, key in settings.encryption_keys().items()
         }
 
     cipher = _master_ciphers.get(key_version)
@@ -140,4 +139,5 @@ def decrypt_value(
         _aad(project_id, environment_id, name, key_version),
     )
 
-    return json.loads(plaintext)
+    value: str | int | bool = json.loads(plaintext)
+    return value

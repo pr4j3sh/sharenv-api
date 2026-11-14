@@ -1,6 +1,7 @@
 import json
+from typing import Any
 
-from bson.objectid import ObjectId
+from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 
 from app.api.v1.auth.exceptions import UnauthorizedAccess
@@ -37,7 +38,7 @@ class Variable:
         self.db = mongo
 
     @staticmethod
-    def _value_size(value) -> int:
+    def _value_size(value: Any) -> int:
         return len(json.dumps(value).encode("utf-8"))
 
     async def _project_value_bytes(self, project_id: str) -> int:
@@ -51,7 +52,7 @@ class Variable:
         if not env_ids:
             return 0
 
-        pipeline = [
+        pipeline: list[dict[str, Any]] = [
             {"$match": {"environment_id": {"$in": env_ids}}},
             {"$group": {"_id": None, "total": {"$sum": "$value_size"}}},
         ]
@@ -127,7 +128,7 @@ class Variable:
     async def create_variable(
         self, user_id: str, environment_id: str, payload: CreateVariableReq
     ) -> CreateVariableRes:
-        log.info(f"creating variable {environment_id}")
+        log.info("creating variable %s", environment_id)
 
         if self.db.environments is None or self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
@@ -193,7 +194,7 @@ class Variable:
         limit: int = settings.PAGINATION_DEFAULT_LIMIT,
         offset: int = 0,
     ) -> tuple[list[GetVariablesRes], int]:
-        log.info(f"fetching variables {environment_id}")
+        log.info("fetching variables %s", environment_id)
 
         if self.db.environments is None or self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
@@ -231,7 +232,7 @@ class Variable:
 
                 res.append(
                     GetVariablesRes(
-                        _id=str(model.id),
+                        id=str(model.id),
                         name=model.name,
                         value=value,
                         environment_id=model.environment_id,
@@ -249,7 +250,7 @@ class Variable:
 
                 res.append(
                     GetVariablesRes(
-                        _id=str(model.id),
+                        id=str(model.id),
                         name=model.name,
                         value=None,
                         environment_id=model.environment_id,
@@ -261,8 +262,10 @@ class Variable:
 
         return res, total
 
-    async def delete_variable(self, user_id, variable_id) -> DeleteVariableRes:
-        log.info(f"deleting variable {variable_id}")
+    async def delete_variable(
+        self, user_id: str, variable_id: str
+    ) -> DeleteVariableRes:
+        log.info("deleting variable %s", variable_id)
 
         if self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
@@ -281,7 +284,7 @@ class Variable:
     async def delete_variable_by_name(
         self, user_id: str, environment_id: str, variable_name: str
     ) -> DeleteVariableRes:
-        log.info(f"deleting variable {environment_id} {variable_name}")
+        log.info("deleting variable %s %s", environment_id, variable_name)
 
         if self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
@@ -298,9 +301,9 @@ class Variable:
         return DeleteVariableRes(variable_id=str(res["_id"]))
 
     async def update_variable(
-        self, user_id, variable_id, payload: UpdateVariableReq
+        self, user_id: str, variable_id: str, payload: UpdateVariableReq
     ) -> UpdateVariableRes:
-        log.info(f"updating variable {variable_id}")
+        log.info("updating variable %s", variable_id)
 
         if self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
@@ -313,7 +316,10 @@ class Variable:
         new_size = self._value_size(payload.value)
         old_size = int(variable.get("value_size") or 0)
         total_bytes = await self._project_value_bytes(project_id)
-        if total_bytes - old_size + new_size > settings.MAX_TOTAL_VALUE_BYTES_PER_PROJECT:
+        if (
+            total_bytes - old_size + new_size
+            > settings.MAX_TOTAL_VALUE_BYTES_PER_PROJECT
+        ):
             raise VariableQuotaExceeded("project value size quota exceeded")
 
         data_key = unwrap_data_key(project["data_key"], project["key_version"])
@@ -350,7 +356,7 @@ class Variable:
         variable_name: str,
         payload: UpdateVariableReq,
     ) -> UpdateVariableRes:
-        log.info(f"updating variable {environment_id} {variable_name}")
+        log.info("updating variable %s %s", environment_id, variable_name)
 
         if self.db.variables is None:
             raise RuntimeError("mongodb is not connected")
@@ -369,7 +375,10 @@ class Variable:
         new_size = self._value_size(payload.value)
         old_size = int(existing.get("value_size") or 0)
         total_bytes = await self._project_value_bytes(project_id)
-        if total_bytes - old_size + new_size > settings.MAX_TOTAL_VALUE_BYTES_PER_PROJECT:
+        if (
+            total_bytes - old_size + new_size
+            > settings.MAX_TOTAL_VALUE_BYTES_PER_PROJECT
+        ):
             raise VariableQuotaExceeded("project value size quota exceeded")
 
         data_key = unwrap_data_key(project["data_key"], project["key_version"])

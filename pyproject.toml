@@ -13,3 +13,69 @@ dependencies = [
     "pymongo>=4.19.0",
     "resend>=2.52.0",
 ]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.0",
+    "ruff>=0.17.5",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py315"
+src = ["."]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific rules
+    "G",   # flake8-logging-format
+    "C90", # mccabe complexity
+]
+ignore = [
+    "RUF002", # allow em-dashes in docstrings
+    "RUF003", # allow em-dashes in comments
+]
+
+[tool.ruff.lint.mccabe]
+# Security-critical paths are inherently branchy; 15 covers the remaining hot spots.
+max-complexity = 15
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI idiom: Query/Depends/Path calls in argument defaults are intentional.
+extend-immutable-calls = [
+    "fastapi.Query",
+    "fastapi.Depends",
+    "fastapi.Path",
+    "fastapi.Body",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.mypy]
+python_version = "3.15"
+mypy_path = "."
+packages = ["app", "scripts"]
+plugins = ["pydantic.mypy"]
+disallow_untyped_defs = true
+strict_optional = true
+warn_return_any = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+# Third-party libs without stubs are allowed to be untyped.
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.api.v1.auth.exceptions import UnauthorizedAccess
 from app.api.v1.environment.exceptions import EnvironmentNotFound
@@ -23,8 +23,7 @@ from app.api.v1.variable.schemas import (
 from app.api.v1.variable.service import Variable
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
-from app.core.pagination import set_pagination_headers
-from app.core.config import settings
+from app.core.pagination import PaginationDep, set_pagination_headers
 from app.core.validation import ensure_variable_name, parse_object_id
 
 router = APIRouter(prefix="/variable", tags=["Variable"])
@@ -37,9 +36,9 @@ async def get_variables(
     environment_id: str,
     response: Response,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    limit: Annotated[int, Query(ge=1, le=settings.PAGINATION_MAX_LIMIT)] = settings.PAGINATION_DEFAULT_LIMIT,
-    offset: Annotated[int, Query(ge=0)] = 0,
-):
+    pagination: PaginationDep,
+) -> list[GetVariablesRes]:
+    limit, offset = pagination.limit, pagination.offset
     parse_object_id(environment_id, label="environment_id")
     try:
         v = Variable()
@@ -71,7 +70,7 @@ async def create_variable(
     environment_id: str,
     req: CreateVariableReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> CreateVariableRes:
     parse_object_id(environment_id, label="environment_id")
     try:
         v = Variable()
@@ -115,7 +114,7 @@ async def delete_variable_by_name(
     environment_id: str,
     variable_name: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> DeleteVariableRes:
     parse_object_id(environment_id, label="environment_id")
     ensure_variable_name(variable_name)
     try:
@@ -149,7 +148,7 @@ async def delete_variable_by_name(
 async def delete_variable(
     variable_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> DeleteVariableRes:
     parse_object_id(variable_id, label="variable_id")
     try:
         v = Variable()
@@ -189,7 +188,7 @@ async def update_variable_by_name(
     variable_name: str,
     req: UpdateVariableReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> UpdateVariableRes:
     parse_object_id(environment_id, label="environment_id")
     ensure_variable_name(variable_name)
     try:
@@ -236,7 +235,7 @@ async def update_variable(
     variable_id: str,
     req: UpdateVariableReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> UpdateVariableRes:
     parse_object_id(variable_id, label="variable_id")
     try:
         v = Variable()

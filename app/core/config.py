@@ -206,14 +206,21 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_email_provider(self) -> Settings:
-        if self.EMAIL_PROVIDER == "resend" and not self.DEBUG:
-            if not self.RESEND_API_KEY.strip():
-                raise ValueError("RESEND_API_KEY must not be empty when EMAIL_PROVIDER=resend")
+        if (
+            self.EMAIL_PROVIDER == "resend"
+            and not self.DEBUG
+            and not self.RESEND_API_KEY.strip()
+        ):
+            raise ValueError(
+                "RESEND_API_KEY must not be empty when EMAIL_PROVIDER=resend"
+            )
         if self.EMAIL_PROVIDER == "smtp":
             if not self.SMTP_HOST.strip():
                 raise ValueError("SMTP_HOST must not be empty when EMAIL_PROVIDER=smtp")
             if not self.EMAIL_FROM.strip():
-                raise ValueError("EMAIL_FROM must not be empty when EMAIL_PROVIDER=smtp")
+                raise ValueError(
+                    "EMAIL_FROM must not be empty when EMAIL_PROVIDER=smtp"
+                )
         return self
 
     @property

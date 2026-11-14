@@ -52,7 +52,7 @@ def _too_many_attempts(e: TooManyAttempts) -> HTTPException:
 
 
 @router.post("/register", response_model=RegisterRes)
-async def register(req: RegisterReq):
+async def register(req: RegisterReq) -> RegisterRes:
     try:
         a = Auth()
         res = await a.register(req)
@@ -88,7 +88,7 @@ async def register(req: RegisterReq):
 
 
 @router.post("/login", response_model=LoginRes)
-async def login(req: LoginReq):
+async def login(req: LoginReq) -> LoginRes:
     try:
         a = Auth()
         res = await a.login(req)
@@ -120,7 +120,7 @@ async def login(req: LoginReq):
 
 
 @router.post("/refresh", response_model=RefreshRes)
-async def refresh(req: RefreshReq):
+async def refresh(req: RefreshReq) -> RefreshRes:
     try:
         a = Auth()
         res = await a.refresh(req.refresh_token)
@@ -141,7 +141,7 @@ async def refresh(req: RefreshReq):
 
 
 @router.post("/logout", response_model=LogoutRes)
-async def logout(user_id: Annotated[str, Depends(get_current_user_id)]):
+async def logout(user_id: Annotated[str, Depends(get_current_user_id)]) -> LogoutRes:
     try:
         a = Auth()
         res = await a.logout(user_id)
@@ -160,7 +160,7 @@ async def logout(user_id: Annotated[str, Depends(get_current_user_id)]):
 
 
 @router.post("/verify", response_model=VerifyUserRes)
-async def verify_user(req: VerifyUserReq):
+async def verify_user(req: VerifyUserReq) -> VerifyUserRes:
     try:
         a = Auth()
         res = await a.verify_user(req.email, req.otp)
@@ -193,10 +193,10 @@ async def verify_user(req: VerifyUserReq):
 
 
 @router.post("/resend", response_model=ResendOtpRes)
-async def resend_otp(req: ResendOtpReq):
+async def resend_otp(req: ResendOtpReq) -> ResendOtpRes:
     try:
         a = Auth()
-        res = await a.resent_otp(req.email)
+        res = await a.resend_otp(req.email)
         return res
     except EmailNotConfigured as e:
         raise HTTPException(

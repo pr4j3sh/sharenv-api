@@ -17,7 +17,8 @@ class CreateVariableReq(BaseModel):
     @field_validator("value")
     @classmethod
     def validate_value(cls, value: str | int | bool) -> str | int | bool:
-        return validate_variable_value_size(value)
+        checked: str | int | bool = validate_variable_value_size(value)
+        return checked
 
 
 class CreateVariableRes(BaseModel):
@@ -46,7 +47,8 @@ class UpdateVariableReq(BaseModel):
     @field_validator("value")
     @classmethod
     def validate_value(cls, value: str | int | bool) -> str | int | bool:
-        return validate_variable_value_size(value)
+        checked: str | int | bool = validate_variable_value_size(value)
+        return checked
 
 
 class UpdateVariableRes(BaseModel):

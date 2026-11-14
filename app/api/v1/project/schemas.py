@@ -1,15 +1,9 @@
 from datetime import datetime
 from typing import Literal
 
-from bson import ObjectId
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    field_serializer,
-    field_validator,
-)
+from pydantic import BaseModel, Field, field_validator
 
+from app.core.serialization import MongoDocument
 from app.core.utils import validate_password_size
 from app.core.validation import validate_project_env_name
 
@@ -41,26 +35,12 @@ class DeleteProjectRes(BaseModel):
     project_id: str
 
 
-class GetProjectsRes(BaseModel):
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-    )
-
-    id: ObjectId | None = Field(default=None, alias="_id")
+class GetProjectsRes(MongoDocument):
     name: str
     user_id: str
     role: Literal["owner", "writer", "reader"]
     created_at: datetime
     updated_at: datetime
-
-    @field_serializer("id")
-    def serialize_id(self, value: ObjectId | None) -> str | None:
-        return str(value) if value else None
-
-    @field_serializer("created_at", "updated_at")
-    def serialize_datetime(self, value: datetime) -> str:
-        return value.isoformat()
 
 
 class MemberRes(BaseModel):
@@ -113,4 +93,3 @@ class RemoveMemberRes(BaseModel):
 class LeaveProjectRes(BaseModel):
     project_id: str
     user_id: str
-

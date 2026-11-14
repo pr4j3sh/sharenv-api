@@ -33,14 +33,12 @@ router = APIRouter(tags=["Invitation"])
 log = get_logger(__name__)
 
 
-@router.post(
-    "/project/{project_id}/invitations", response_model=CreateInvitationRes
-)
+@router.post("/project/{project_id}/invitations", response_model=CreateInvitationRes)
 async def create_invitation(
     project_id: str,
     req: CreateInvitationReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> CreateInvitationRes:
     parse_object_id(project_id, label="project_id")
     try:
         svc = Invitation()
@@ -60,13 +58,11 @@ async def create_invitation(
         raise HTTPException(status_code=500, detail="Internal Server Error") from e
 
 
-@router.get(
-    "/project/{project_id}/invitations", response_model=list[GetInvitationRes]
-)
+@router.get("/project/{project_id}/invitations", response_model=list[GetInvitationRes])
 async def get_invitations(
     project_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> list[GetInvitationRes]:
     parse_object_id(project_id, label="project_id")
     try:
         svc = Invitation()
@@ -87,7 +83,7 @@ async def cancel_invitation(
     invitation_id: str,
     req: CancelInvitationReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> CancelInvitationRes:
     parse_object_id(project_id, label="project_id")
     parse_object_id(invitation_id, label="invitation_id")
     try:
@@ -110,7 +106,7 @@ async def cancel_invitation(
 async def accept_invitation(
     token: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> AcceptInvitationRes:
     if not token or len(token) > MAX_INVITATION_TOKEN_LENGTH:
         raise HTTPException(status_code=400, detail="invalid invitation token")
     try:

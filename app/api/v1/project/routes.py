@@ -27,8 +27,7 @@ from app.api.v1.project.schemas import (
 from app.api.v1.project.service import Project
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
-from app.core.pagination import set_pagination_headers
-from app.core.config import settings
+from app.core.pagination import PaginationDep, set_pagination_headers
 from app.core.validation import ensure_project_env_name, parse_object_id
 
 router = APIRouter(prefix="/project", tags=["Project"])
@@ -40,10 +39,10 @@ log = get_logger(__name__)
 async def get_projects(
     response: Response,
     user_id: Annotated[str, Depends(get_current_user_id)],
-    project_name: str = Query(default=None),
-    limit: Annotated[int, Query(ge=1, le=settings.PAGINATION_MAX_LIMIT)] = settings.PAGINATION_DEFAULT_LIMIT,
-    offset: Annotated[int, Query(ge=0)] = 0,
-):
+    pagination: PaginationDep,
+    project_name: str | None = Query(default=None),
+) -> list[GetProjectsRes]:
+    limit, offset = pagination.limit, pagination.offset
     if project_name is not None:
         ensure_project_env_name(project_name, kind="Project")
     try:
@@ -65,7 +64,7 @@ async def get_projects(
 async def create_project(
     req: CreateProjectReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> CreateProjectRes:
     try:
         p = Project()
         res = await p.create_project(user_id, req)
@@ -97,7 +96,7 @@ async def create_project(
 async def list_members(
     project_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> list[MemberRes]:
     parse_object_id(project_id, label="project_id")
     try:
         p = Project()
@@ -115,15 +114,13 @@ async def list_members(
         ) from e
 
 
-@router.patch(
-    "/{project_id}/members/{member_id}", response_model=UpdateMemberAccessRes
-)
+@router.patch("/{project_id}/members/{member_id}", response_model=UpdateMemberAccessRes)
 async def update_member_access(
     project_id: str,
     member_id: str,
     req: UpdateMemberAccessReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> UpdateMemberAccessRes:
     parse_object_id(project_id, label="project_id")
     parse_object_id(member_id, label="member_id")
     try:
@@ -162,7 +159,7 @@ async def update_member_access(
 async def leave_project(
     project_id: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> LeaveProjectRes:
     parse_object_id(project_id, label="project_id")
     try:
         p = Project()
@@ -197,7 +194,7 @@ async def remove_member(
     member_id: str,
     req: RemoveMemberReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> RemoveMemberRes:
     parse_object_id(project_id, label="project_id")
     parse_object_id(member_id, label="member_id")
     try:
@@ -237,7 +234,7 @@ async def delete_project(
     project_id: str,
     req: DeleteProjectReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> DeleteProjectRes:
     parse_object_id(project_id, label="project_id")
     try:
         p = Project()
@@ -266,7 +263,7 @@ async def delete_project_by_name(
     project_name: str,
     req: DeleteProjectReq,
     user_id: Annotated[str, Depends(get_current_user_id)],
-):
+) -> DeleteProjectRes:
     ensure_project_env_name(project_name, kind="Project")
     try:
         p = Project()

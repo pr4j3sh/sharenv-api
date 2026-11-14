@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable, MutableMapping
+from typing import Any
 
 from fastapi import FastAPI
-from starlette.responses import JSONResponse
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 
-Scope = dict[str, Any]
-Receive = Callable[[], Awaitable[dict[str, Any]]]
-Send = Callable[[dict[str, Any]], Awaitable[None]]
-ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
+type Scope = MutableMapping[str, Any]
+type Receive = Callable[[], Awaitable[MutableMapping[str, Any]]]
+type Send = Callable[[MutableMapping[str, Any]], Awaitable[None]]
+type ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
+type Message = MutableMapping[str, Any]
 
 
 def _header_values(raw_headers: list[tuple[bytes, bytes]], name: bytes) -> list[bytes]:
@@ -26,7 +29,9 @@ def _first_header(raw_headers: list[tuple[bytes, bytes]], name: bytes) -> bytes 
     return values[0] if values else None
 
 
-def _remove_header(raw_headers: list[tuple[bytes, bytes]], name: bytes) -> list[tuple[bytes, bytes]]:
+def _remove_header(
+    raw_headers: list[tuple[bytes, bytes]], name: bytes
+) -> list[tuple[bytes, bytes]]:
     target = name.lower()
     return [(key, value) for key, value in raw_headers if key.lower() != target]
 
@@ -42,7 +47,7 @@ def _parse_int_header(value: bytes | None) -> int | None:
         return None
     try:
         return int(value.decode("ascii").strip())
-    except (ValueError, UnicodeDecodeError):
+    except ValueError, UnicodeDecodeError:
         return -1
 
 
@@ -107,7 +112,9 @@ class SecurityMiddleware:
             return
 
         raw_headers = list(scope.get("headers") or [])
-        content_length = _parse_int_header(_first_header(raw_headers, b"content-length"))
+        content_length = _parse_int_header(
+            _first_header(raw_headers, b"content-length")
+        )
 
         if content_length is not None and content_length < 0:
             await self._json_response(
@@ -119,7 +126,10 @@ class SecurityMiddleware:
             )
             return
 
-        if content_length is not None and content_length > settings.MAX_REQUEST_BODY_BYTES:
+        if (
+            content_length is not None
+            and content_length > settings.MAX_REQUEST_BODY_BYTES
+        ):
             await self._json_response(
                 scope,
                 receive,
@@ -192,7 +202,7 @@ class SecurityMiddleware:
         buffered_body = bytes(body)
         body_sent = False
 
-        async def downstream_receive() -> dict[str, Any]:
+        async def downstream_receive() -> Message:
             nonlocal body_sent
             if not body_sent:
                 body_sent = True
@@ -217,7 +227,7 @@ class SecurityMiddleware:
         await response(scope, receive, send)
 
     def _send_with_headers(self, scope: Scope, send: Send) -> Send:
-        async def send_with_headers(message: dict[str, Any]) -> None:
+        async def send_with_headers(message: Message) -> None:
             if message.get("type") == "http.response.start":
                 message = {
                     **message,
@@ -228,7 +238,7 @@ class SecurityMiddleware:
         return send_with_headers
 
     def _headers_for_response(
-        self, scope: Scope, message: dict[str, Any]
+        self, scope: Scope, message: Message
     ) -> list[tuple[bytes, bytes]]:
         raw_headers = list(message.get("headers") or [])
         path = scope.get("path", "")
@@ -251,8 +261,7 @@ class SecurityMiddleware:
         self, raw_headers: list[tuple[bytes, bytes]]
     ) -> list[tuple[bytes, bytes]]:
         existing = [
-            value.decode("latin-1")
-            for value in _header_values(raw_headers, b"vary")
+            value.decode("latin-1") for value in _header_values(raw_headers, b"vary")
         ]
 
         vary_values: list[str] = []
@@ -275,3 +284,11 @@ def register_middlewares(app: FastAPI) -> None:
     # Keep body/JSON limits and response headers in a single ASGI layer so
     # early 413/400 responses get the same headers as normal responses.
     app.add_middleware(SecurityMiddleware)
+    # Starlette applies the last-registered middleware outermost. Keep the
+    # host allowlist last so disallowed hosts are rejected before the request
+    # body is read and before any other processing runs.
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=settings.allowed_hosts()
+        or ["localhost", "127.0.0.1", "[::1]", "testserver"],
+    )

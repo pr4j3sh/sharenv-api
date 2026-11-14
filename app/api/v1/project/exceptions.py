@@ -28,4 +28,3 @@ class ForbiddenAccess(Exception):
 
 class CannotModifyOwner(Exception):
     pass
-

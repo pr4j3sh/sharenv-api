@@ -1,8 +1,8 @@
 from typing import Annotated
 
 import jwt
+from bson import ObjectId
 from bson.errors import InvalidId
-from bson.objectid import ObjectId
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 

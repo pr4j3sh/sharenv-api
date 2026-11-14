@@ -1,14 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, field_serializer
+from app.core.serialization import SerializableDocument
 
 
-class UserModel(BaseModel):
-    model_config = ConfigDict(
-        populate_by_name=True,
-        arbitrary_types_allowed=True,
-    )
-
+class UserModel(SerializableDocument):
     email: str
     password: str
     is_verified: bool = False
@@ -19,7 +14,3 @@ class UserModel(BaseModel):
     token_version: int = 0
     # jti of the currently valid refresh token; rotated on every use.
     refresh_jti: str | None = None
-
-    @field_serializer("otp_expiry")
-    def serialize_datetime(self, value: datetime) -> str:
-        return value.isoformat()

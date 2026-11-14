@@ -1,4 +1,4 @@
-from bson.objectid import ObjectId
+from bson import ObjectId
 from pymongo.errors import DuplicateKeyError
 
 from app.api.v1.auth.exceptions import UnauthorizedAccess
@@ -30,10 +30,10 @@ class Environment:
     def __init__(self) -> None:
         self.db = mongo
 
-    async def create_environemnt(
+    async def create_environment(
         self, user_id: str, project_id: str, payload: CreateEnvironmentReq
     ) -> CreateEnvironmentRes:
-        log.info(f"creating environment {project_id} {payload}")
+        log.info("creating environment %s %s", project_id, payload)
 
         if self.db.environments is None or self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
@@ -48,7 +48,9 @@ class Environment:
         if not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")
 
-        env_count = await self.db.environments.count_documents({"project_id": project_id})
+        env_count = await self.db.environments.count_documents(
+            {"project_id": project_id}
+        )
         if env_count >= settings.MAX_ENVIRONMENTS_PER_PROJECT:
             raise EnvironmentQuotaExceeded("environment quota exceeded")
 
@@ -92,7 +94,7 @@ class Environment:
         limit: int = settings.PAGINATION_DEFAULT_LIMIT,
         offset: int = 0,
     ) -> tuple[list[EnvironmentModel], int]:
-        log.info(f"fetching environments {user_id} {project_id}")
+        log.info("fetching environments %s %s", user_id, project_id)
 
         if self.db.environments is None or self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
@@ -129,8 +131,10 @@ class Environment:
             EnvironmentModel.model_validate(environment) for environment in environments
         ], total
 
-    async def delete_environment(self, user_id: str, environment_id: str):
-        log.info(f"deleting environment {environment_id}")
+    async def delete_environment(
+        self, user_id: str, environment_id: str
+    ) -> DeleteEnvironmentRes:
+        log.info("deleting environment %s", environment_id)
 
         if (
             self.db.environments is None
@@ -163,7 +167,7 @@ class Environment:
         res = await self.db.variables.delete_many({"environment_id": environment_id})
         if not res.acknowledged:
             raise DeleteVariableFailed(
-                "Failed to delete variables for this envrionment"
+                "Failed to delete variables for this environment"
             )
 
         res = await self.db.environments.delete_one({"_id": ObjectId(environment_id)})
@@ -175,8 +179,8 @@ class Environment:
 
     async def delete_environment_by_name(
         self, user_id: str, project_id: str, environment_name: str
-    ):
-        log.info(f"deleting environment {project_id} {environment_name}")
+    ) -> DeleteEnvironmentRes:
+        log.info("deleting environment %s %s", project_id, environment_name)
 
         if (
             self.db.environments is None
@@ -211,7 +215,7 @@ class Environment:
         res = await self.db.variables.delete_many({"environment_id": environment_id})
         if not res.acknowledged:
             raise DeleteVariableFailed(
-                "Failed to delete variables for this envrionment"
+                "Failed to delete variables for this environment"
             )
 
         res = await self.db.environments.delete_one({"_id": environment["_id"]})

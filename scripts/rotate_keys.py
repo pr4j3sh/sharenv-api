@@ -38,9 +38,7 @@ async def _rotate(dry_run: bool) -> int:
         raise RuntimeError("mongodb is not connected")
 
     active = settings.ENCRYPTION_KEY_VERSION
-    log.info(
-        "active master key version: %s%s", active, " (dry run)" if dry_run else ""
-    )
+    log.info("active master key version: %s%s", active, " (dry run)" if dry_run else "")
 
     counts = {
         "projects_rewrapped": 0,
@@ -88,7 +86,9 @@ async def _rotate(dry_run: bool) -> int:
                 )
                 if not res.acknowledged:
                     counts["failed"] += 1
-                    log.error("project %s: failed to update wrapped data key", project_id)
+                    log.error(
+                        "project %s: failed to update wrapped data key", project_id
+                    )
                     continue
 
             counts["projects_rewrapped"] += 1
