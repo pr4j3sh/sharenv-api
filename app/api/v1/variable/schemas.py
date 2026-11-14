@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.validation import validate_variable_name, validate_variable_value_size
 
@@ -30,9 +30,7 @@ class DeleteVariableRes(BaseModel):
 
 
 class GetVariablesRes(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: str = Field(alias="_id")
+    id: str = Field(serialization_alias="_id")
     name: str
     value: str | int | bool | None
     environment_id: str
