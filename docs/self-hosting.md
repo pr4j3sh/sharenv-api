@@ -32,7 +32,7 @@ curl http://localhost/health
 > If `docker compose ps` shows the API restarting, check `docker compose logs api`.
 > The most common cause is the master key registry file being unreadable by the
 > container's non-root user — see [Configure secrets](#configure-secrets) for
-> the required `chown`.
+> the required permissions.
 
 To use different host ports:
 
@@ -64,14 +64,24 @@ Then continue with [HTTPS](#enable-https-on-your-server) if you need it.
 
 - Create the master key registry, a JSON object mapping key versions to keys.
 
-  > Compose mounts it into the API container as a Docker secret, so the master key never appears in `.env.docker` or in `docker inspect` output:
-
-  ```bash
-  mkdir -p deploy/secrets
-  printf '{"1": "%s"}\n' "$(openssl rand -base64 32)" > deploy/secrets/encryption_keys.json
-  chown 10001:10001 deploy/secrets/encryption_keys.json
-  chmod 0640 deploy/secrets/encryption_keys.json
-  ```
+  > Compose mounts it into the API container as a Docker secret, so the master key never appears in `.env.docker` or in `docker inspect` output.
+  >
+  > The image runs as a non-root user (uid/gid `10001`), and Compose file-backed secrets are plain bind mounts: the file's host owner and mode are preserved inside the container. Give the file either of the following permissions:
+  >
+  > ```bash
+  > # preferred (needs root/sudo): keep it owner-only
+  > sudo chown 10001:10001 deploy/secrets/encryption_keys.json && chmod 0640 deploy/secrets/encryption_keys.json
+  >
+  > # simplest (no root): world-readable, acceptable on a dedicated host
+  > chmod 0644 deploy/secrets/encryption_keys.json
+  > ```
+  >
+  > Wrong permissions here are the most common setup failure: the API crashes at startup with an `EACCES` reading the registry and `docker compose ps` shows it restarting. Check `docker compose logs api` when that happens.
+  >
+  > ```bash
+  > mkdir -p deploy/secrets
+  > printf '{"1": "%s"}\n' "$(openssl rand -base64 32)" > deploy/secrets/encryption_keys.json
+  > ```
 
   > The image runs as a non-root user (uid/gid `10001`), and Compose file-backed
   > secrets are plain bind mounts: the file's host owner and permissions are
