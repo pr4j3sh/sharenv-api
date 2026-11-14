@@ -59,6 +59,9 @@ How keys are laid out:
 6. Verify a project's values still decrypt through the API, then remove the
    old version from the registry and restart once more. Until you do, the old
    key can still decrypt pre-rotation data (and any backups that contain it).
+   If rotation finishes with orphaned variables (no parent environment) it
+   exits 1 and refuses to proceed — fix or remove them first, or pass
+   `--allow-orphans` if you must proceed anyway.
 
 ## Notes and failure modes
 

@@ -160,11 +160,14 @@ and `typ: "access"`; refresh tokens carry `typ: "refresh"` and are
 single-use and rotated on `POST /v1/auth/refresh`. `get_current_user_id`
 decodes the token and re-checks the user and `token_version` on every request,
 so `POST /v1/auth/logout` (which bumps `token_version`), a refresh-token
-replay (which revokes the whole chain), and user deletion all invalidate
-issued tokens immediately. The default access-token lifetime is 15 minutes
-(`JWT_EXPIRY`); refresh tokens expire after 30 days
-(`REFRESH_TOKEN_EXPIRY_DAYS`). MFA/TOTP and per-token (jti-based) revocation
-are not yet implemented. See `plan.md` §3.
+replay (which revokes the whole chain beyond a short retry window), and user
+deletion all invalidate issued tokens immediately. The retry window
+(`REFRESH_RETRY_GRACE_SECONDS`, default 60 seconds) exists so a client that
+retries a lost refresh response does not burn the whole session chain; it
+never permits a replayed refresh token to survive past the window. The default
+access-token lifetime is 15 minutes (`JWT_EXPIRY`); refresh tokens expire
+after 30 days (`REFRESH_TOKEN_EXPIRY_DAYS`). MFA/TOTP and per-token (jti-based)
+revocation are not yet implemented.
 
 ### Malicious or curious project member
 
@@ -218,7 +221,10 @@ cannot or do not want to run/point at a mail relay; it must not be exposed to
 an untrusted network.
 
 - New accounts are created unverified and **may log in**; login reports
-  `email_verified: false` in the response (also in `/v1/auth/refresh`).
+  `email_verified: false` in the response (also in `/v1/auth/refresh`). (When a
+  mail provider IS configured, unverified accounts cannot log in — and a
+  correct password for an unverified account is rejected exactly like a wrong
+  one, so the response cannot be used to distinguish the two.)
 - Invitation accept requires token possession plus the email match, but no
   verification (nobody can ever become verified in this mode).
 - Invitation tokens are returned at creation time for out-of-band delivery;
