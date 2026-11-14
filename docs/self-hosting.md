@@ -4,10 +4,36 @@ This guide deploys sharenv-api with Docker Compose, MongoDB, and nginx.
 
 > nginx serves HTTP by default and switches to HTTPS automatically when provided with certificates.
 
+## Run the released image
+
+Every `vX.Y.Z` tag publishes a multi-arch (amd64 + arm64) image to Docker Hub:
+
+```text
+docker.io/<dockerhub-user>/sharenv-api:<version>
+```
+
+`latest` tracks the newest tag, but **pin a version in production** — `latest` is for convenience. To use the released image instead of building from source, swap the API service in `docker compose` to the image (replace `build:` and point `image:` at the tag you want), e.g.:
+
+```yaml
+services:
+  api:
+    image: <dockerhub-user>/sharenv-api:0.2.0
+    restart: unless-stopped
+    env_file: .env.docker
+```
+
+Sanity-check the image exists before deploying:
+
+```bash
+docker pull <dockerhub-user>/sharenv-api:0.2.0
+```
+
+The compose stack ships no database — you must also provide a MongoDB (see below). The image contains only the API: no database, no nginx inside it.
+
 ## Requirements
 
 - Docker Engine with the Compose plugin (`docker compose`)
-- A MongoDB instance reachable by the API — managed service (MongoDB Atlas, DocumentDB-compatible) or your own (e.g. a separate container/host). The bundled stack does not ship one; the API exits at startup if `MONGO_URI` is unreachable.
+- A MongoDB instance reachable by the API
 - Ports 80 and 443 available (configurable)
 - OpenSSL for generating secrets
 
@@ -166,14 +192,12 @@ curl -I http://your-domain
 
 - When renewing certificates, replace both files and restart nginx again. The filenames are fixed by `deploy/nginx/https.conf`.
 
-## Point the API at your MongoDB
+## Setup MongoDB
 
-The bundled stack does not ship a database. Edit `MONGO_URI` in `.env.docker` to point at yours — managed service (MongoDB Atlas, DocumentDB-compatible) or your own (a separate container, a host elsewhere, a VM). The API pings MongoDB at startup and exits if it cannot reach it, so it won't serve before the database is ready.
+Edit `MONGO_URI` in `.env.docker` to the mongodb instance.
 
 Include credentials in the URI if your database requires authentication, for example:
 
 ```env
 MONGO_URI=mongodb://user:password@db.example.com:27017/?authSource=admin
 ```
-
-> The former `docker compose -f compose.yaml -f compose.external-db.yaml` workflow is gone; you run a single `docker compose up -d --build`.

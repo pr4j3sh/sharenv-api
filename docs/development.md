@@ -10,6 +10,18 @@ Local setup for development or running the API without Docker.
 - [uv](https://docs.astral.sh/uv/)
 - MongoDB instance
 
+## Cut a release
+
+Releases are cut by pushing a version tag; the release workflow verifies the tag matches `project.version` in `pyproject.toml`, builds and pushes the image to Docker Hub (`docker.io/<dockerhub-user>/sharenv-api`), and creates a GitHub Release with generated notes.
+
+```bash
+# bump project.version in pyproject.toml (e.g. 0.1.0 -> 0.2.0), commit it, then:
+git tag v0.2.0
+git push --tags
+```
+
+The pipeline is defined in `.github/workflows/release.yml` and publishes `X.Y.Z`, `X.Y`, and `latest` tags for the API image only.
+
 ## Setup
 
 - Clone repository
