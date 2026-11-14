@@ -39,7 +39,7 @@ from app.core.crypto import (
     verify_otp,
 )
 from app.core.email import send_email
-from app.core.logger import get_logger
+from app.core.logger import get_logger, redact_secrets
 from app.core.rate_limit import login_failures, otp_attempts, otp_resends
 from app.core.security import (
     DUMMY_HASH,
@@ -106,7 +106,11 @@ class Auth:
             try:
                 res = await send_email(payload=EmailPayload(to=email, otp=otp))
             except Exception as e:
-                log.exception("Failed to send OTP email")
+                log.error(
+                    "Failed to send OTP email (%s): %s",
+                    type(e).__name__,
+                    redact_secrets(str(e), otp, email),
+                )
                 await self._rollback_registration(user.inserted_id)
                 raise SendEmailError("Failed to send email") from e
 

@@ -105,7 +105,9 @@ verify through the usual resend-OTP flow — no migration needed.
 
 > `DEBUG=True` and `EMAIL_PROVIDER=console` both skip delivery and log OTPs
 > and invitation tokens; never enable them in production. `console` exists for
-> local development only.
+> local development only. The app refuses to start with
+> `EMAIL_PROVIDER=console` unless `DEBUG=True`, so production can't silently
+> log secrets.
 
 Optional tuning (defaults shown):
 

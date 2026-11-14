@@ -29,7 +29,7 @@ from app.api.v1.project.permissions import resolve_access
 from app.core.config import settings
 from app.core.crypto import generate_invitation_token, hash_secret
 from app.core.email import send_invitation_email
-from app.core.logger import get_logger
+from app.core.logger import get_logger, redact_secrets
 from app.core.utils import get_current_time
 from app.db.mongodb import mongo
 
@@ -140,9 +140,12 @@ class Invitation:
                     token=token,
                 )
                 email_sent = True
-            except Exception:
-                log.exception(
-                    "Failed to send invitation email; owner can share the token"
+            except Exception as e:
+                log.error(
+                    "Failed to send invitation email (%s);"
+                    " owner can share the token: %s",
+                    type(e).__name__,
+                    redact_secrets(str(e), token, email),
                 )
 
         return CreateInvitationRes(

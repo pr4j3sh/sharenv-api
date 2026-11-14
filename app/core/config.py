@@ -184,6 +184,11 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_email_provider(self) -> Settings:
+        if self.EMAIL_PROVIDER == "console" and not self.DEBUG:
+            raise ValueError(
+                "EMAIL_PROVIDER=console logs OTP and invitation tokens;"
+                " it is only allowed with DEBUG=true"
+            )
         if (
             self.EMAIL_PROVIDER == "resend"
             and not self.DEBUG

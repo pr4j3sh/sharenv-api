@@ -18,3 +18,11 @@ setup_logger()
 
 def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
+
+
+def redact_secrets(text: str, *secrets: str | None) -> str:
+    redacted = text
+    for secret in secrets:
+        if secret:
+            redacted = redacted.replace(secret, "***")
+    return redacted
