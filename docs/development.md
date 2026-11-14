@@ -12,7 +12,7 @@ Local setup for development or running the API without Docker.
 
 ## Cut a release
 
-Releases are cut by pushing a version tag; the release workflow verifies the tag matches `project.version` in `pyproject.toml`, builds and pushes the image to Docker Hub (`docker.io/<dockerhub-user>/sharenv-api`), and creates a GitHub Release with generated notes.
+Releases are cut by pushing a version tag; the release workflow verifies the tag matches `project.version` in `pyproject.toml`, then builds and pushes the image to Docker Hub (`docker.io/<DOCKER_USERNAME>/sharenv-api`). There is no GitHub Release page — tags are the version signal and the image is the artifact.
 
 ```bash
 # bump project.version in pyproject.toml (e.g. 0.1.0 -> 0.2.0), commit it, then:
