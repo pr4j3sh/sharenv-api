@@ -1,4 +1,4 @@
-# Master key rotation runbook
+# Master Key Rotation Runbook
 
 How keys are laid out:
 
@@ -28,7 +28,7 @@ How keys are laid out:
    `deploy/secrets/encryption_keys.json`:
 
    ```json
-   {"1": "<old base64 key>", "2": "<new base64 key>"}
+   { "1": "<old base64 key>", "2": "<new base64 key>" }
    ```
 
    For local development, update `ENCRYPTION_KEYS_JSON` in `.env`.

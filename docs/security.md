@@ -1,4 +1,4 @@
-# sharenv-api security model
+# sharenv-api Security Model
 
 This document describes what the `sharenv-api` server protects, what it does
 not protect, and the assumptions behind those claims. It is the trust model
@@ -53,12 +53,12 @@ There is no key material in the CLI. All key material is held by the server.
 
 ## Data classification
 
-| Class                  | Examples                                                                          | At rest                                                                                                                     | Who can read it                                                     |
-| ---------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| **Secret**             | Variable values                                                                   | AES-256-GCM ciphertext (`value_enc`)                                                                                        | Any member of the project, the API process, the operator, host root |
-| **Sensitive metadata** | Variable names, environment names, project names, member user IDs, account emails | Plaintext                                                                                                                   | The same parties as secrets, plus anyone with database access       |
+| Class                  | Examples                                                                                                                             | At rest                                                                                                                                                                                                                                  | Who can read it                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **Secret**             | Variable values                                                                                                                      | AES-256-GCM ciphertext (`value_enc`)                                                                                                                                                                                                     | Any member of the project, the API process, the operator, host root |
+| **Sensitive metadata** | Variable names, environment names, project names, member user IDs, account emails                                                    | Plaintext                                                                                                                                                                                                                                | The same parties as secrets, plus anyone with database access       |
 | **Credentials**        | Password hashes, HMAC-hashed verification OTPs, `JWT_SECRET`, master encryption keys (`ENCRYPTION_KEYS_JSON`/`ENCRYPTION_KEYS_FILE`) | Argon2id password hashes and peppered OTP hashes in `users`; keys outside the database — the master key registry is a Docker secret file (`deploy/secrets/encryption_keys.json`), `JWT_SECRET` is still a container environment variable | The API process and host root; never returned by the API            |
-| **Operational**        | ObjectIds, timestamps, `key_version`, record sizes                                | Plaintext                                                                                                                   | Anyone with database access                                         |
+| **Operational**        | ObjectIds, timestamps, `key_version`, record sizes                                                                                   | Plaintext                                                                                                                                                                                                                                | Anyone with database access                                         |
 
 Decisions recorded here:
 
@@ -302,19 +302,19 @@ deployment or compliance discussion.
 Each gap is tracked in `plan.md`; this table records the state at the time of
 writing.
 
-| Gap                                                                                 | Impact                                                                                                | Fix    |
-| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------ |
-| `JWT_SECRET` still lives in `.env`/container environment                             | `docker inspect` and `/proc/<pid>/environ` expose it                                                  | §9     |
-| Verification email depends on the configured provider (`smtp`/`resend`)      | Provider compromise exposes recipient addresses and OTPs; `none` mode has no verification at all (see "Unverified operation") | §3     |
-| No MFA/TOTP                                                                         | A stolen or guessed password alone is enough after verification                                       | §3     |
-| Auth rate limiting is in-memory and per-process                                      | Counters reset on restart and are not shared across uvicorn workers (nginx adds a coarse outer limit)  | §3, §9 |
-| Per-email login lockout is an account-availability DoS surface                       | An attacker can lock out any email address by sending failures                                        | §3     |
-| No membership-change audit trail                                                    | Limited attribution for invitations, role/grant changes, and removals                                  | §4, §7 |
-| No audit log; some PII/names still appear in logs                                   | Limited detection/attribution; metadata may leak into logs                                            | §7     |
-| Bundled MongoDB has no authentication or TLS                                        | Anyone who can reach it reads everything                                                              | §8     |
-| HTTP-only fallback; `Host`-based redirect                                           | Plaintext exposure and open redirect                                                                  | §9     |
-| Secrets may exist in git history                                                    | Key and token leakage through the repository                                                          | §10    |
-| Backup handling is undocumented                                                     | Backups may be unprotected or unencrypted                                                             | §8     |
+| Gap                                                                     | Impact                                                                                                                        | Fix    |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `JWT_SECRET` still lives in `.env`/container environment                | `docker inspect` and `/proc/<pid>/environ` expose it                                                                          | §9     |
+| Verification email depends on the configured provider (`smtp`/`resend`) | Provider compromise exposes recipient addresses and OTPs; `none` mode has no verification at all (see "Unverified operation") | §3     |
+| No MFA/TOTP                                                             | A stolen or guessed password alone is enough after verification                                                               | §3     |
+| Auth rate limiting is in-memory and per-process                         | Counters reset on restart and are not shared across uvicorn workers (nginx adds a coarse outer limit)                         | §3, §9 |
+| Per-email login lockout is an account-availability DoS surface          | An attacker can lock out any email address by sending failures                                                                | §3     |
+| No membership-change audit trail                                        | Limited attribution for invitations, role/grant changes, and removals                                                         | §4, §7 |
+| No audit log; some PII/names still appear in logs                       | Limited detection/attribution; metadata may leak into logs                                                                    | §7     |
+| Bundled MongoDB has no authentication or TLS                            | Anyone who can reach it reads everything                                                                                      | §8     |
+| HTTP-only fallback; `Host`-based redirect                               | Plaintext exposure and open redirect                                                                                          | §9     |
+| Secrets may exist in git history                                        | Key and token leakage through the repository                                                                                  | §10    |
+| Backup handling is undocumented                                         | Backups may be unprotected or unencrypted                                                                                     | §8     |
 
 ## Assumptions
 

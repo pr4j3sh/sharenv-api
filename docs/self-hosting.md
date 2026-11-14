@@ -11,20 +11,25 @@ This guide deploys sharenv-api with Docker Compose, MongoDB, and nginx.
 - Ports 80 and 443 available (configurable)
 - OpenSSL for generating secrets
 
-## 1. Configure secrets
+## Configure secrets
+
+- Copy the `.env.docker.example` file as `.env.docker`
 
 ```bash
 cp .env.docker.example .env.docker
+```
+
+- Generate `JWT` secret
+
+```bash
 openssl rand -hex 32     # JWT_SECRET
 ```
 
-> Put the JWT value into `JWT_SECRET` in `.env.docker`. Don't create a
-> master key here — it goes into the registry you create in the next step,
-> not into `.env.docker`.
+> Put the JWT value into `JWT_SECRET` in `.env.docker`.
 
-Create the master key registry — a JSON object mapping key versions to keys.
-Compose mounts it into the API container as a Docker secret, so the master key
-never appears in `.env.docker` or in `docker inspect` output:
+- Create the master key registry, a JSON object mapping key versions to keys.
+
+> Compose mounts it into the API container as a Docker secret, so the master key never appears in `.env.docker` or in `docker inspect` output:
 
 ```bash
 mkdir -p deploy/secrets
@@ -32,12 +37,12 @@ umask 077
 printf '{"1": "%s"}\n' "$(openssl rand -base64 32)" > deploy/secrets/encryption_keys.json
 ```
 
-> `deploy/secrets/` is gitignored. `ENCRYPTION_KEYS_FILE` in `.env.docker`
+> `ENCRYPTION_KEYS_FILE` in `.env.docker`
 > already points at the in-container path `/run/secrets/encryption_keys`, and
 > `ENCRYPTION_KEY_VERSION=1` marks that key active. Rotating the master key is
 > documented in [docs/key-rotation.md](key-rotation.md).
 
-## Email (optional but recommended)
+### Email (optional but recommended)
 
 sharenv does **not** require a mail server to function. By default
 (`EMAIL_PROVIDER=none`) no mail is sent: accounts are created unverified,
@@ -56,19 +61,13 @@ invitation response includes both `token` and `email_sent`.
 
 Three supported setups:
 
-### A. No mail (default) — out-of-band invites
+#### No mail (default)
 
 ```env
 EMAIL_PROVIDER=none
 ```
 
-Workflow: create the project → `sharenv invite create` → share the printed
-token with the teammate → teammate runs `sharenv invite accept <token>`.
-No DNS, SPF, or third-party account needed. Note that unverified accounts
-cannot complete OTP verification, so login simply does not require it in this
-mode; `email_verified` in the login/refresh response is always `false`.
-
-### B. Your org's mail relay (recommended when available)
+#### Your organization's mail relay (recommended when available)
 
 ```env
 EMAIL_PROVIDER=smtp
@@ -80,20 +79,7 @@ SMTP_TLS=starttls               # starttls | ssl | none
 EMAIL_FROM=sharenv <sharenv@abc.com>
 ```
 
-Works with: an internal Postfix relay, Google Workspace SMTP relay
-(`smtp-relay.gmail.com`, registered IPs or SMTP AUTH with a service mailbox),
-Microsoft 365 (`smtp.office365.com:587` — enable _Authenticated SMTP_ for a
-service mailbox; basic-auth SMTP is being deprecated), or the SMTP endpoint of
-any transactional provider (SES, SendGrid, Mailgun…). Intra-org delivery
-through your own relay needs no SPF/DKIM/DMARC work.
-
-With a provider configured, OTP verification is enforced as usual, invitation
-emails are sent, and the invitation token is _also_ returned in the API
-response as a fallback. Email delivery is best-effort: an SMTP outage does not
-block invites (`email_sent: false` in the response tells you to share the
-token yourself).
-
-### C. Resend
+#### Resend
 
 ```env
 EMAIL_PROVIDER=resend
@@ -101,10 +87,8 @@ RESEND_API_KEY=re_xxxxxxxx
 EMAIL_FROM=Acme <no-reply@abc.com>   # a sender verified in Resend
 ```
 
-Same behavior as (B); needs a Resend account and a verified domain/sender.
-
-To move from `none` to `smtp`/`resend` later, existing unverified users can
-verify through the usual resend-OTP flow — no migration needed.
+> To move from `none` to `smtp`/`resend` later, existing unverified users can
+> verify through the usual resend-OTP flow — no migration needed.
 
 > `DEBUG=True` and `EMAIL_PROVIDER=console` both skip delivery and log OTPs
 > and invitation tokens; never enable them in production. `console` exists for
@@ -112,7 +96,7 @@ verify through the usual resend-OTP flow — no migration needed.
 > `EMAIL_PROVIDER=console` unless `DEBUG=True`, so production can't silently
 > log secrets.
 
-Optional tuning (defaults shown):
+### Optional tuning (defaults shown)
 
 ```env
 DOCS_ENABLED=False          # API docs (/docs, /redoc, /openapi.json)
@@ -133,7 +117,9 @@ INVITATION_EXPIRY_DAYS=7    # days before a pending project invitation expires
 > intentionally expose the API schema. The API enforces in-memory auth rate
 > limits (single-process); nginx adds a coarse outer limit on `/v1/auth/`.
 
-## 2. Start with HTTP
+## Setting up HTTP Server
+
+- Build and run docker container
 
 ```bash
 docker compose up -d --build
@@ -141,13 +127,7 @@ docker compose ps
 curl http://localhost/health
 ```
 
-Expected response:
-
-```json
-{ "status": "ok", "checks": { "app": "ok" } }
-```
-
-`/health` is the liveness probe — it only proves the process is up. `/health/ready` is the readiness probe: it pings MongoDB (2s timeout) and returns `200 {"status": "ok", "checks": {"mongo": "ok"}}` when the database is reachable, or `503 {"status": "unavailable", "checks": {"mongo": "unavailable"}}` otherwise. Point your orchestrator's readiness/liveness probes here; the bundled Docker `HEALTHCHECK` intentionally uses `/health`.
+> Expected response: `{ "status": "ok", "checks": { "app": "ok" } }`
 
 > Without certificates, nginx serves plain HTTP and logs `serving HTTP only`. Only expose this mode on a trusted network or behind another TLS-terminating proxy.
 
@@ -159,7 +139,7 @@ HTTP_PORT=8080 HTTPS_PORT=8443 docker compose up -d
 
 > The automatic HTTP-to-HTTPS redirect assumes HTTPS is published on 443.
 
-## 3. Enable HTTPS with your own certificates
+## Enable HTTPS on your server
 
 - Place your certificate chain and private key here:
 
@@ -186,7 +166,7 @@ curl -I http://your-domain
 
 - When renewing certificates, replace both files and restart nginx again. The filenames are fixed by `deploy/nginx/https.conf`.
 
-## 4. Use an external MongoDB
+## Use an external MongoDB
 
 - By default, Compose starts a bundled `mongo:8.0` container with the `mongo_data` volume. To use your own MongoDB, edit `MONGO_URI` in `.env.docker`, then run:
 

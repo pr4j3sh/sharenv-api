@@ -1,31 +1,31 @@
 # Running from source
 
-Local setup for development or running the API without Docker. For production
-deployment with Docker Compose, see [self-hosting.md](self-hosting.md).
+Local setup for development or running the API without Docker.
+
+> For production deployment with Docker Compose, see [self-hosting.md](self-hosting.md).
 
 ## Requirements
 
 - [Python 3.15+](https://www.python.org/downloads/)
 - [uv](https://docs.astral.sh/uv/)
-- A MongoDB instance reachable at `MONGO_URI` (the lifespan pings it on
-  startup; startup fails without it)
+- MongoDB instance
 
 ## Setup
 
-- clone repository
+- Clone repository
 
 ```bash
 git clone https://github.com/pr4j3sh/sharenv-api
 cd sharenv-api
 ```
 
-- install dependencies
+- Install dependencies
 
 ```bash
 uv sync
 ```
 
-- setup environment variables
+- Setup environment variables
 
 ```bash
 cp .env.example .env
@@ -46,6 +46,4 @@ openssl rand -base64 32  # master key
 uv run fastapi dev
 ```
 
-> The server starts on `http://127.0.0.1:8000`. If `DOCS_ENABLED` is `True`,
-> API docs are at <http://127.0.0.1:8000/docs> (disabled by default in
-> production/Docker configs).
+> The server starts on `http://127.0.0.1:8000`. If `DOCS_ENABLED` is `True`, API docs are at <http://127.0.0.1:8000/docs> (disabled by default in Docker configs).
