@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from pwdlib import PasswordHash
 from pydantic import PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -98,6 +99,7 @@ class Settings(BaseSettings):
     LOGIN_LOCKOUT_MINUTES: int = 15
     OTP_VERIFY_ATTEMPTS: int = 10
     OTP_RESEND_LIMIT: int = 3
+    RATE_LIMIT_MAX_KEYS: int = 10_000
 
     INVITATION_EXPIRY_DAYS: int = 7
 
@@ -131,6 +133,7 @@ class Settings(BaseSettings):
     _encryption_keys: dict[int, bytes] = PrivateAttr(default_factory=dict)
     _master_ciphers: dict[int, AESGCM] = PrivateAttr(default_factory=dict)
     _dummy_otp_hash: str = PrivateAttr(default="")
+    _dummy_password_hash: str = PrivateAttr(default="")
 
     @field_validator("JWT_SECRET")
     @classmethod
@@ -203,6 +206,13 @@ class Settings(BaseSettings):
             ).hexdigest()
         return self._dummy_otp_hash
 
+    def dummy_password_hash(self) -> str:
+        if not self._dummy_password_hash:
+            self._dummy_password_hash = PasswordHash.recommended().hash(
+                secrets.token_urlsafe(32)
+            )
+        return self._dummy_password_hash
+
     def allowed_hosts(self) -> list[str]:
         return [host.strip() for host in self.ALLOWED_HOSTS.split(",") if host.strip()]
 
@@ -236,3 +246,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+NOT_AUTHENTICATED = {"WWW-Authenticate": "Bearer"}

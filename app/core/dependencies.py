@@ -6,12 +6,11 @@ from bson.errors import InvalidId
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.core.config import NOT_AUTHENTICATED
 from app.core.security import decode_access_token
 from app.db.mongodb import mongo
 
 bearer_scheme = HTTPBearer()
-
-_NOT_AUTHENTICATED = {"WWW-Authenticate": "Bearer"}
 
 
 async def get_current_user_id(
@@ -28,7 +27,7 @@ async def get_current_user_id(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
-            headers=_NOT_AUTHENTICATED,
+            headers=NOT_AUTHENTICATED,
         ) from e
 
     user_id = payload.get("sub")
@@ -37,7 +36,7 @@ async def get_current_user_id(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
-            headers=_NOT_AUTHENTICATED,
+            headers=NOT_AUTHENTICATED,
         )
 
     try:
@@ -46,7 +45,7 @@ async def get_current_user_id(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
-            headers=_NOT_AUTHENTICATED,
+            headers=NOT_AUTHENTICATED,
         ) from e
 
     if mongo.users is None:
@@ -58,14 +57,14 @@ async def get_current_user_id(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
-            headers=_NOT_AUTHENTICATED,
+            headers=NOT_AUTHENTICATED,
         )
 
     if payload.get("ver") != user.get("token_version", 0):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
-            headers=_NOT_AUTHENTICATED,
+            headers=NOT_AUTHENTICATED,
         )
 
     return user_id

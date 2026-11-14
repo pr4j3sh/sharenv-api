@@ -6,8 +6,6 @@ from fastapi import HTTPException, Request, status
 
 from app.core.config import settings
 
-_MAX_KEYS = 10_000
-
 
 class SlidingWindowCounter:
     def __init__(self) -> None:
@@ -55,7 +53,7 @@ class SlidingWindowCounter:
         return now
 
     def _compact(self) -> None:
-        if len(self._events) > _MAX_KEYS:
+        if len(self._events) > settings.RATE_LIMIT_MAX_KEYS:
             self._events = {
                 key: events for key, events in self._events.items() if events
             }
