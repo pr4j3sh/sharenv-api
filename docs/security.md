@@ -311,7 +311,7 @@ writing.
 | Per-email login lockout is an account-availability DoS surface          | An attacker can lock out any email address by sending failures                                                                | §3     |
 | No membership-change audit trail                                        | Limited attribution for invitations, role/grant changes, and removals                                                         | §4, §7 |
 | No audit log; some PII/names still appear in logs                       | Limited detection/attribution; metadata may leak into logs                                                                    | §7     |
-| Bundled MongoDB has no authentication or TLS                            | Anyone who can reach it reads everything                                                                                      | §8     |
+| MongoDB has no authentication or TLS by default                        | Anyone who can reach it reads everything                                                                                      | §8     |
 | HTTP-only fallback; `Host`-based redirect                               | Plaintext exposure and open redirect                                                                                          | §9     |
 | Secrets may exist in git history                                        | Key and token leakage through the repository                                                                                  | §10    |
 | Backup handling is undocumented                                         | Backups may be unprotected or unencrypted                                                                                     | §8     |

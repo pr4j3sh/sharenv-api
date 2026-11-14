@@ -45,7 +45,7 @@ FastAPI + async MongoDB (PyMongo `AsyncMongoClient`) API for managing projects, 
 
 ## Deployment
 
-- `docs/self-hosting.md` is the deployment guide. Compose reads `.env.docker` (not `.env`) and runs the API, a bundled `mongo:8.0`, and nginx.
-- `docker compose up -d --build`; for an external DB use `docker compose -f compose.yaml -f compose.external-db.yaml up -d --build`.
+- `docs/self-hosting.md` is the deployment guide. Compose reads `.env.docker` (not `.env`) and runs the API and nginx; `MONGO_URI` must point at a MongoDB you operate (the bundled stack ships none).
+- `docker compose up -d --build`.
 - nginx picks HTTP or HTTPS at container start based on whether `deploy/certs/fullchain.pem` and `privkey.pem` exist (`deploy/nginx/40-select-config.sh`); those filenames are fixed.
 - The runtime image runs non-root with a read-only root filesystem and a `/tmp` tmpfs; write only to `/tmp`. It starts `uvicorn app.main:app` without reload.

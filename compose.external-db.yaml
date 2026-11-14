@@ -1,6 +1,0 @@
-services:
-  api:
-    depends_on: !reset []
-  mongo:
-    profiles:
-      - bundled-db

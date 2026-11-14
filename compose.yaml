@@ -9,9 +9,6 @@ services:
       - .env.docker
     expose:
       - "8000"
-    depends_on:
-      mongo:
-        condition: service_healthy
     healthcheck:
       test:
         [
@@ -36,21 +33,6 @@ services:
     networks:
       - sharenv
 
-  mongo:
-    image: mongo:8.0
-    restart: unless-stopped
-    volumes:
-      - mongo_data:/data/db
-    healthcheck:
-      test:
-        ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    networks:
-      - sharenv
-
   nginx:
     build:
       context: ./deploy/nginx
@@ -65,9 +47,6 @@ services:
       - ./deploy/certs:/etc/nginx/certs:ro
     networks:
       - sharenv
-
-volumes:
-  mongo_data:
 
 networks:
   sharenv:

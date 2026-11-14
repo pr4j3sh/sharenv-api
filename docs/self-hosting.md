@@ -7,7 +7,7 @@ This guide deploys sharenv-api with Docker Compose, MongoDB, and nginx.
 ## Requirements
 
 - Docker Engine with the Compose plugin (`docker compose`)
-- Compose v2.24 or newer for the external MongoDB override
+- A MongoDB instance reachable by the API — managed service (MongoDB Atlas, DocumentDB-compatible) or your own (e.g. a separate container/host). The bundled stack does not ship one; the API exits at startup if `MONGO_URI` is unreachable.
 - Ports 80 and 443 available (configurable)
 - OpenSSL for generating secrets
 
@@ -166,16 +166,14 @@ curl -I http://your-domain
 
 - When renewing certificates, replace both files and restart nginx again. The filenames are fixed by `deploy/nginx/https.conf`.
 
-## Use an external MongoDB
+## Point the API at your MongoDB
 
-- By default, Compose starts a bundled `mongo:8.0` container with the `mongo_data` volume. To use your own MongoDB, edit `MONGO_URI` in `.env.docker`, then run:
+The bundled stack does not ship a database. Edit `MONGO_URI` in `.env.docker` to point at yours — managed service (MongoDB Atlas, DocumentDB-compatible) or your own (a separate container, a host elsewhere, a VM). The API pings MongoDB at startup and exits if it cannot reach it, so it won't serve before the database is ready.
 
-```bash
-docker compose -f compose.yaml -f compose.external-db.yaml up -d --build
-```
-
-- This override disables the bundled MongoDB service and removes the API's dependency on it. Include credentials in the URI if your database requires authentication, for example:
+Include credentials in the URI if your database requires authentication, for example:
 
 ```env
 MONGO_URI=mongodb://user:password@db.example.com:27017/?authSource=admin
 ```
+
+> The former `docker compose -f compose.yaml -f compose.external-db.yaml` workflow is gone; you run a single `docker compose up -d --build`.
