@@ -1,19 +1,14 @@
 # Self-hosting sharenv-api
 
-This guide deploys sharenv-api with Docker Compose, MongoDB, and nginx.
+This guide deploys sharenv-api with Docker Compose: the API runs as the
+published multi-arch image from Docker Hub (`pr4j3sh/sharenv-api`, tags
+`X.Y.Z`, `X.Y`, and `latest`), fronted by nginx. nginx serves HTTP by
+default and switches to HTTPS automatically when provided with certificates.
+To run from source instead (development), see
+[docs/development.md](development.md).
 
-> nginx serves HTTP by default and switches to HTTPS automatically when provided with certificates.
-
-## Ways to run it
-
-| # | How | Install steps | When to pick it |
-|---|-----|---------------|-----------------|
-| A | **Published image** + Compose | [Option A](#option-a-published-image--compose-recommended) | recommended; production |
-| B | **Published image** + plain `docker run` | [Option B](#option-b-published-image-plain-docker-run) | you have an existing MongoDB and your own TLS terminator |
-| C | **Build from source** + Compose | [Option C](#option-c-build-from-source-compose) | you want to audit/modify the code |
-| D | **From source**, no container runtime | see [docs/development.md](development.md) | development |
-
-The published images are multi-arch (`linux/amd64`, `linux/arm64`) and available at `docker.io/<DOCKER_USERNAME>/sharenv-api` with tags `X.Y.Z`, `X.Y` and `latest`. **Pin a version in production**; `latest` is for convenience. No GitHub Release page is published — tags are the only version signal; the image is the artifact.
+> Pin a version in production (e.g. `pr4j3sh/sharenv-api:0.2.0`); `latest`
+> is for convenience.
 
 ## Requirements
 
@@ -22,66 +17,39 @@ The published images are multi-arch (`linux/amd64`, `linux/arm64`) and available
 - Ports 80 and 443 available (configurable)
 - OpenSSL for generating secrets
 
-## Option A — Published image + Compose (recommended)
+## Install
 
 ```bash
 git clone https://github.com/pr4j3sh/sharenv-api.git
 cd sharenv-api
 ```
 
-1. **Point the API at the released image.** Edit `compose.yaml`: replace the `build:` line in the `api` service with `image:` (nothing else changes):
+The bundled `compose.yaml` runs the image as `pr4j3sh/sharenv-api:latest`;
+to pin a version, edit the `image:` line in the `api` service.
 
-   ```yaml
-   services:
-     api:
-       image: <DOCKER_USERNAME>/sharenv-api:0.2.0
-       restart: unless-stopped
-       env_file: .env.docker
-       expose:
-         - "8000"
-   ```
+- Configure secrets — see [Configure secrets](#configure-secrets)
+- Point at your MongoDB — see [Setup MongoDB](#setup-mongodb)
 
-   Optional sanity check: `docker pull <DOCKER_USERNAME>/sharenv-api:0.2.0`
-
-2. **Configure secrets** — see [Configure secrets](#configure-secrets).
-3. **Point at your MongoDB** — see [Setup MongoDB](#setup-mongodb).
-4. **Start it**:
-
-   ```bash
-   docker compose up -d
-   curl http://localhost/health
-   ```
-
-   No `--build` flag needed. Then continue with [HTTPS](#enable-https-on-your-server) if you need it.
-
-## Option B — Published image, plain `docker run`
-
-For deployments where you run an external MongoDB and your own TLS terminator (nginx, Traefik, Caddy…) instead of the bundled compose stack:
+Then start the stack and check health:
 
 ```bash
-docker run -d --name sharenv-api \
-  -e MONGO_URI=mongodb://user:password@db.example.com:27017/?authSource=admin \
-  -e JWT_SECRET=<openssl rand -hex 32> \
-  -e ENCRYPTION_KEYS_FILE=/run/secrets/encryption_keys \
-  -e ENCRYPTION_KEY_VERSION=1 \
-  -v "$PWD/deploy/secrets:/run/secrets:ro" \
-  -p 127.0.0.1:8000:8000 \
-  <DOCKER_USERNAME>/sharenv-api:0.2.0
+docker compose up -d
+curl http://localhost/health
 ```
 
-You supply the TLS certificate, the reverse proxy, and the database; the image itself is just the API.
+> Expected response: `{ "status": "ok", "checks": { "app": "ok" } }`
 
-## Option C — Build from source (Compose)
-
-Identical to Option A, except keep `build: .` in `compose.yaml` as-is and start with:
+To use different host ports:
 
 ```bash
-docker compose up -d --build
+HTTP_PORT=8080 HTTPS_PORT=8443 docker compose up -d
 ```
 
-## Option D — From source, no containers
+> Without certificates, nginx serves plain HTTP and logs `serving HTTP only`.
+> The automatic HTTP-to-HTTPS redirect assumes HTTPS is published on 443.
+> Only expose this mode on a trusted network or behind another TLS-terminating proxy.
 
-Development setup with `uv` and Python 3.15+; see [docs/development.md](development.md).
+Then continue with [HTTPS](#enable-https-on-your-server) if you need it.
 
 ## Configure secrets
 
@@ -199,28 +167,6 @@ Include credentials in the URI if your database requires authentication, for exa
 ```env
 MONGO_URI=mongodb://user:password@db.example.com:27017/?authSource=admin
 ```
-
-## Setting up HTTP Server
-
-- Start the stack:
-
-  ```bash
-  docker compose up -d
-  docker compose ps
-  curl http://localhost/health
-  ```
-
-  > Expected response: `{ "status": "ok", "checks": { "app": "ok" } }`
-
-  > Without certificates, nginx serves plain HTTP and logs `serving HTTP only`. Only expose this mode on a trusted network or behind another TLS-terminating proxy.
-
-- To use different host ports:
-
-  ```bash
-  HTTP_PORT=8080 HTTPS_PORT=8443 docker compose up -d
-  ```
-
-  > The automatic HTTP-to-HTTPS redirect assumes HTTPS is published on 443.
 
 ## Enable HTTPS on your server
 

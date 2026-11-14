@@ -2,8 +2,7 @@ name: sharenv
 
 services:
   api:
-    build:
-      context: .
+    image: pr4j3sh/sharenv-api:latest
     restart: unless-stopped
     env_file:
       - .env.docker
