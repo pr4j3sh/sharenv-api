@@ -47,7 +47,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.core.utils import get_current_time
+from app.core.utils import dummy_otp_hash, dummy_password_hash, get_current_time
 from app.db.mongodb import mongo
 
 log = get_logger(__name__)
@@ -143,7 +143,7 @@ class Auth:
         user = await self.db.users.find_one({"email": email})
 
         if not user or user.get("is_verified"):
-            verify_otp(settings.dummy_otp_hash(), otp)
+            verify_otp(dummy_otp_hash(), otp)
             await otp_attempts.record(f"otp:{email}", settings.OTP_EXPIRY * 60)
             raise VerifyOtpError("failed to verify otp")
 
@@ -250,7 +250,7 @@ class Auth:
         user = await self.db.users.find_one({"email": email})
 
         if not user:
-            verify_password(payload.password, settings.dummy_password_hash())
+            verify_password(payload.password, dummy_password_hash())
             await login_failures.record(
                 f"fail:{email}", settings.LOGIN_LOCKOUT_MINUTES * 60
             )

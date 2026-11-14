@@ -1,57 +1,10 @@
-import base64
-import hashlib
-import hmac
-import json
-import secrets
 from pathlib import Path
 from typing import Literal
 
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from pwdlib import PasswordHash
-from pydantic import PrivateAttr, field_validator, model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
-def _parse_key_registry(raw: str) -> dict[int, bytes]:
-    try:
-        registry = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise ValueError("key registry must be a valid JSON object") from e
-
-    if not isinstance(registry, dict) or not registry:
-        raise ValueError("key registry must be a non-empty JSON object")
-
-    parsed: dict[int, bytes] = {}
-
-    for version, key in registry.items():
-        if not isinstance(version, str) or not version.isdigit():
-            raise ValueError(
-                f"key registry version {version!r} must be an integer string"
-            )
-
-        if not isinstance(key, str):
-            raise TypeError(
-                f"key registry entry for version {version} must be a base64 string"
-            )
-
-        try:
-            decoded = base64.b64decode(key, validate=True)
-        except Exception as e:
-            raise ValueError(
-                f"key registry entry for version {version} must be valid base64"
-            ) from e
-
-        if len(decoded) != 32:
-            raise ValueError(
-                f"key registry entry for version {version} must decode to 32 bytes"
-            )
-
-        if int(version) in parsed:
-            raise ValueError(f"key registry has duplicate version {version}")
-
-        parsed[int(version)] = decoded
-
-    return parsed
+from app.core.utils import parse_key_registry
 
 
 class Settings(BaseSettings):
@@ -139,11 +92,6 @@ class Settings(BaseSettings):
 
     NOT_AUTHENTICATED: dict[str, str] = {"WWW-Authenticate": "Bearer"}
 
-    _encryption_keys: dict[int, bytes] = PrivateAttr(default_factory=dict)
-    _master_ciphers: dict[int, AESGCM] = PrivateAttr(default_factory=dict)
-    _dummy_otp_hash: str = PrivateAttr(default="")
-    _dummy_password_hash: str = PrivateAttr(default="")
-
     @field_validator("JWT_SECRET")
     @classmethod
     def validate_jwt_secret(cls, value: str) -> str:
@@ -183,7 +131,7 @@ class Settings(BaseSettings):
         else:
             raw = self.ENCRYPTION_KEYS_JSON
 
-        keys = _parse_key_registry(raw)
+        keys = parse_key_registry(raw)
 
         if self.ENCRYPTION_KEY_VERSION not in keys:
             raise ValueError(
@@ -191,39 +139,7 @@ class Settings(BaseSettings):
                 " from the key registry"
             )
 
-        self._encryption_keys = keys
         return self
-
-    def encryption_keys(self) -> dict[int, bytes]:
-        return self._encryption_keys
-
-    def master_cipher(self, key_version: int) -> AESGCM:
-        if not self._master_ciphers:
-            self._master_ciphers = {
-                version: AESGCM(key) for version, key in self._encryption_keys.items()
-            }
-        cipher = self._master_ciphers.get(key_version)
-        if cipher is None:
-            raise ValueError(f"key version {key_version} is not in the key registry")
-        return cipher
-
-    def dummy_otp_hash(self) -> str:
-        if not self._dummy_otp_hash:
-            value = secrets.token_urlsafe(32)
-            self._dummy_otp_hash = hmac.new(
-                self.JWT_SECRET.encode(), value.encode(), hashlib.sha256
-            ).hexdigest()
-        return self._dummy_otp_hash
-
-    def dummy_password_hash(self) -> str:
-        if not self._dummy_password_hash:
-            self._dummy_password_hash = PasswordHash.recommended().hash(
-                secrets.token_urlsafe(32)
-            )
-        return self._dummy_password_hash
-
-    def allowed_hosts(self) -> list[str]:
-        return [host.strip() for host in self.ALLOWED_HOSTS.split(",") if host.strip()]
 
     @model_validator(mode="after")
     def validate_email_provider(self) -> Settings:

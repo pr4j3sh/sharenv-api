@@ -9,6 +9,7 @@ import string
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from app.core.config import settings
+from app.core.utils import master_cipher
 
 
 def generate_otp() -> str:
@@ -41,7 +42,7 @@ def get_data_key() -> bytes:
 def wrap_data_key(data_key: bytes) -> str:
     nonce = os.urandom(settings.NONCE_SIZE)
 
-    ciphertext = settings.master_cipher(settings.ENCRYPTION_KEY_VERSION).encrypt(
+    ciphertext = master_cipher(settings.ENCRYPTION_KEY_VERSION).encrypt(
         nonce,
         data_key,
         settings.KEY_INFO.encode(),
@@ -56,7 +57,7 @@ def unwrap_data_key(wrapped_key: str, key_version: int) -> bytes:
     if len(raw) <= settings.NONCE_SIZE:
         raise ValueError("invalid wrapped data key")
 
-    return settings.master_cipher(key_version).decrypt(
+    return master_cipher(key_version).decrypt(
         raw[: settings.NONCE_SIZE],
         raw[settings.NONCE_SIZE :],
         settings.KEY_INFO.encode(),

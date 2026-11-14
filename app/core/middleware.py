@@ -9,6 +9,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.core.utils import allowed_hosts
 
 type Scope = MutableMapping[str, Any]
 type Receive = Callable[[], Awaitable[MutableMapping[str, Any]]]
@@ -278,6 +279,6 @@ def register_middlewares(app: FastAPI) -> None:
     app.add_middleware(SecurityMiddleware)
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=settings.allowed_hosts()
+        allowed_hosts=allowed_hosts()
         or ["localhost", "127.0.0.1", "[::1]", "testserver"],
     )
