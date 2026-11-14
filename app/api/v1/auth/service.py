@@ -41,7 +41,6 @@ from app.core.email import send_email
 from app.core.logger import get_logger, redact_secrets
 from app.core.rate_limit import login_failures, otp_attempts, otp_resends
 from app.core.security import (
-    DUMMY_HASH,
     create_access_token,
     create_refresh_token,
     decode_refresh_token,
@@ -251,7 +250,7 @@ class Auth:
         user = await self.db.users.find_one({"email": email})
 
         if not user:
-            verify_password(payload.password, DUMMY_HASH)
+            verify_password(payload.password, settings.dummy_password_hash())
             await login_failures.record(
                 f"fail:{email}", settings.LOGIN_LOCKOUT_MINUTES * 60
             )

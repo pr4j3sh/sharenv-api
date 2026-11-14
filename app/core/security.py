@@ -1,4 +1,3 @@
-import secrets
 from datetime import timedelta
 from uuid import uuid4
 
@@ -9,8 +8,6 @@ from app.core.config import settings
 from app.core.utils import get_current_time
 
 password_hash = PasswordHash.recommended()
-
-DUMMY_HASH = password_hash.hash(secrets.token_urlsafe(32))
 
 
 def hash_password(password: str) -> str:
