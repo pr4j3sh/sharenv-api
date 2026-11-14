@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.health.routes import router as health_router
 from app.api.v1.router import router
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
@@ -30,10 +31,5 @@ app = FastAPI(
 register_middlewares(app)
 register_exception_handlers(app)
 
-
-@app.get("/health", tags=["Health"])
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
+app.include_router(health_router)
 app.include_router(router)

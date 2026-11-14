@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     OTP_EXPIRY: int = 10
     OTP_LENGTH: int = 6
 
+    # Timeout (seconds) for a MongoDB ping, e.g. the /health/ready probe.
+    MONGO_PING_TIMEOUT_SECONDS: float = 2.0
+
     # Auth rate limiting. The app-level counters are in-memory and
     # single-process only; nginx adds a coarse outer limit (deploy/nginx/).
     AUTH_RATE_LIMIT_PER_IP: int = 30  # requests per minute across /v1/auth/*

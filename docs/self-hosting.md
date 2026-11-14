@@ -139,8 +139,10 @@ curl http://localhost/health
 Expected response:
 
 ```json
-{ "status": "ok" }
+{"status": "ok", "checks": {"app": "ok"}}
 ```
+
+`/health` is the liveness probe — it only proves the process is up. `/health/ready` is the readiness probe: it pings MongoDB (2s timeout) and returns `200 {"status": "ok", "checks": {"mongo": "ok"}}` when the database is reachable, or `503 {"status": "unavailable", "checks": {"mongo": "unavailable"}}` otherwise. Point your orchestrator's readiness/liveness probes here; the bundled Docker `HEALTHCHECK` intentionally uses `/health`.
 
 > Without certificates, nginx serves plain HTTP and logs `serving HTTP only`. Only expose this mode on a trusted network or behind another TLS-terminating proxy.
 

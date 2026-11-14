@@ -14,7 +14,8 @@ FastAPI + async MongoDB (PyMongo `AsyncMongoClient`) API for managing projects, 
 
 ## Layout
 
-- `app/main.py`: app creation, lifespan, `/health`, and middleware that adds `Cache-Control: no-store` to `/v1/variable*` responses. API docs (`/docs`, `/redoc`, `/openapi.json`) are enabled only when `DOCS_ENABLED` is true.
+- `app/api/health/`: `/health` (liveness) and `/health/ready` (readiness, pings MongoDB with a 2s timeout; 503 when down). Unversioned on purpose — probes are infrastructure concerns.
+- `app/main.py`: app creation, lifespan, middleware and exception-handler registration, and the router mount. API docs (`/docs`, `/redoc`, `/openapi.json`) are enabled only when `DOCS_ENABLED` is true.
 - `app/api/v1/router.py`: mounts feature routers under `/v1`. Adding a feature requires registering its router here.
 - Each feature (`auth`, `project`, `environment`, `variable`, `invitation`) is a package split into `routes.py` (HTTP + exception translation), `service.py` (business logic + Mongo access), `models.py` (stored documents), `schemas.py` (request/response), and `exceptions.py` (domain errors).
 - `app/core/`: `config.py` (pydantic-settings), `security.py` (password/JWT helpers + token claims), `crypto.py` (AES-GCM value encryption), `dependencies.py` (`get_current_user_id` Bearer auth with per-request user/version checks), `rate_limit.py` (in-memory auth rate limiting), `logger.py`, `pagination.py` (list-pagination params dependency + `X-*` headers), `serialization.py` (`SerializableDocument`/`MongoDocument` base models with shared field serializers), `middleware.py`, `validation.py`, `errors.py`, `utils.py`.
