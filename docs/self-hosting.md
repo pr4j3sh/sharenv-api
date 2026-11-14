@@ -4,31 +4,70 @@ This guide deploys sharenv-api with Docker Compose, MongoDB, and nginx.
 
 > nginx serves HTTP by default and switches to HTTPS automatically when provided with certificates.
 
-## Run the released image
+## Install from the released image
 
-Every `vX.Y.Z` tag publishes a multi-arch (amd64 + arm64) image to Docker Hub:
+The recommended way to run sharenv-api is the published container image — you don't build from source. Every `vX.Y.Z` tag publishes a multi-arch (amd64 + arm64) image to Docker Hub at `docker.io/<DOCKER_USERNAME>/sharenv-api:<version>`, and a GitHub release page (with auto-generated notes and a source tarball) is created for the same tag at `https://github.com/pr4j3sh/sharenv-api/releases`.
 
-```text
-docker.io/<dockerhub-user>/sharenv-api:<version>
+`latest` tracks the newest tag, but **pin a version in production** — `latest` is for convenience.
+
+The image contains only the API: no database and no nginx inside it. The compose stack (nginx + your MongoDB) ships separately — clone the repo to get it:
+
+```bash
+git clone https://github.com/pr4j3sh/sharenv-api.git
+cd sharenv-api
 ```
 
-`latest` tracks the newest tag, but **pin a version in production** — `latest` is for convenience. To use the released image instead of building from source, swap the API service in `docker compose` to the image (replace `build:` and point `image:` at the tag you want), e.g.:
+### 1. Point the API at the released image
+
+Edit `compose.yaml`: replace the `build:` line in the `api` service with `image:` (that is the only difference from the from-source install):
 
 ```yaml
 services:
   api:
-    image: <dockerhub-user>/sharenv-api:0.2.0
+    image: <DOCKER_USERNAME>/sharenv-api:0.2.0
     restart: unless-stopped
     env_file: .env.docker
+    expose:
+      - "8000"
 ```
 
-Sanity-check the image exists before deploying:
+Optional sanity check:
 
 ```bash
-docker pull <dockerhub-user>/sharenv-api:0.2.0
+docker pull <DOCKER_USERNAME>/sharenv-api:0.2.0
 ```
 
-The compose stack ships no database — you must also provide a MongoDB (see below). The image contains only the API: no database, no nginx inside it.
+### 2. Configure secrets
+
+Exactly as the from-source flow — copy `.env.docker.example` to `.env.docker`, set `JWT_SECRET` (`openssl rand -hex 32`), and create the master key registry at `deploy/secrets/encryption_keys.json` (see [Configure secrets](#configure-secrets)). The released image reads `/run/secrets/encryption_keys` the same as a locally built one.
+
+### 3. Point at your MongoDB
+
+The bundled stack ships no database. Edit `MONGO_URI` in `.env.docker` to your instance — managed service (Atlas, DocumentDB-compatible) or your own — see [Setup MongoDB](#setup-mongodb).
+
+### 4. Start it
+
+```bash
+docker compose up -d
+curl http://localhost/health
+```
+
+No `--build` flag needed. Then continue with [HTTP](#setting-up-http-server) and [HTTPS](#enable-https-on-your-server) as usual, or see [Setup MongoDB](#setup-mongodb).
+
+### Without Docker Compose
+
+```bash
+docker run -d --name sharenv-api \
+  -e MONGO_URI=mongodb://user:password@db.example.com:27017/?authSource=admin \
+  -e JWT_SECRET=<openssl rand -hex 32> \
+  -e ENCRYPTION_KEYS_FILE=/run/secrets/encryption_keys \
+  -e ENCRYPTION_KEY_VERSION=1 \
+  -v $PWD/deploy/secrets:/run/secrets:ro \
+  -p 127.0.0.1:8000:8000 \
+  <DOCKER_USERNAME>/sharenv-api:0.2.0
+```
+
+You then provide your own TLS terminator (nginx, Traefik, Caddy…) in front; there is no bundled nginx in this mode.
 
 ## Requirements
 
