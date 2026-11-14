@@ -36,13 +36,11 @@ async def _send_via_smtp(to: str, subject: str, html: str) -> dict[str, str]:
     return {"id": "smtp"}
 
 
-async def _deliver(
-    to: str, subject: str, html: str, kind: str, secret: str
-) -> Mapping[str, Any]:
+async def _deliver(to: str, subject: str, html: str, kind: str) -> Mapping[str, Any]:
     provider = settings.EMAIL_PROVIDER
 
     if settings.DEBUG or provider == "console":
-        log.info("console email provider: kind=%s to=%s secret=%s", kind, to, secret)
+        log.info("console email provider: kind=%s to=%s", kind, to)
         return {"id": "console"}
 
     if provider == "resend":
@@ -69,7 +67,6 @@ async def send_email(payload: EmailPayload) -> Mapping[str, Any]:
         subject=payload.subject,
         html=f"<p><span>OTP:</span>&nbsp;<b>{payload.otp}</b></p>",
         kind="otp",
-        secret=payload.otp,
     )
 
 
@@ -86,5 +83,4 @@ async def send_invitation_email(
             f"<p><b>{token}</b></p>"
         ),
         kind="invitation",
-        secret=token,
     )

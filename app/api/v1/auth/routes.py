@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.api.v1.auth.exceptions import (
     CreateTokenError,
@@ -13,7 +13,6 @@ from app.api.v1.auth.exceptions import (
     SendEmailError,
     TooManyAttempts,
     UserAlreadyExists,
-    UserNotVerified,
     VerifyOtpError,
 )
 from app.api.v1.auth.schemas import (
@@ -90,11 +89,6 @@ async def login(req: LoginReq) -> LoginRes:
         raise HTTPException(
             status_code=401,
             detail=str(e),
-        ) from e
-    except UserNotVerified as e:
-        raise HTTPException(
-            status_code=403,
-            detail="email_not_verified",
         ) from e
     except TooManyAttempts as e:
         raise too_many_attempts(e.retry_after) from e
@@ -183,10 +177,15 @@ async def verify_user(req: VerifyUserReq) -> VerifyUserRes:
 
 
 @router.post("/resend", response_model=ResendOtpRes)
-async def resend_otp(req: ResendOtpReq) -> ResendOtpRes:
+async def resend_otp(
+    req: ResendOtpReq,
+    request: Request,
+) -> ResendOtpRes:
     try:
         a = Auth()
-        res = await a.resend_otp(req.email)
+        res = await a.resend_otp(
+            req.email, request.client.host if request.client else None
+        )
         return res
     except EmailNotConfigured as e:
         raise HTTPException(

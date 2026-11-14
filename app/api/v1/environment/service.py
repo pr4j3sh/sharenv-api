@@ -1,4 +1,5 @@
 from bson import ObjectId
+from bson.errors import InvalidId
 from pymongo.errors import DuplicateKeyError
 
 from app.api.v1.auth.exceptions import UnauthorizedAccess
@@ -110,7 +111,15 @@ class Environment:
         if access.environments is not None:
             if not access.environments:
                 return [], 0
-            query["_id"] = {"$in": [ObjectId(eid) for eid in access.environments]}
+            env_oids = []
+            for eid in access.environments:
+                try:
+                    env_oids.append(ObjectId(eid))
+                except InvalidId, TypeError:
+                    continue
+            if not env_oids:
+                return [], 0
+            query["_id"] = {"$in": env_oids}
 
         if environment_name is not None:
             query["name"] = environment_name

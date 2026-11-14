@@ -63,6 +63,8 @@ auth_ip_limits = SlidingWindowCounter()
 login_failures = SlidingWindowCounter()
 otp_attempts = SlidingWindowCounter()
 otp_resends = SlidingWindowCounter()
+resend_ip_limits = SlidingWindowCounter()
+reauth_failures = SlidingWindowCounter()
 
 
 async def enforce_auth_ip_limit(request: Request) -> None:

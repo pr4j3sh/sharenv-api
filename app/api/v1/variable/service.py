@@ -336,7 +336,7 @@ class Variable:
                     ),
                     "key_version": settings.ENCRYPTION_KEY_VERSION,
                     "value_size": new_size,
-                    "updated_at": now.isoformat(),
+                    "updated_at": now,
                 },
             },
         )
@@ -395,7 +395,7 @@ class Variable:
                     ),
                     "key_version": settings.ENCRYPTION_KEY_VERSION,
                     "value_size": new_size,
-                    "updated_at": now.isoformat(),
+                    "updated_at": now,
                 },
             },
         )

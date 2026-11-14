@@ -104,7 +104,7 @@ class Invitation:
                 "project_id": project_id,
                 "email": email,
                 "accepted_at": None,
-                "expires_at": {"$gt": now.isoformat()},
+                "expires_at": {"$gt": now},
             }
         )
         if existing:
@@ -119,7 +119,7 @@ class Invitation:
             role=payload.role,
             environments=env_ids,
             invited_by=user_id,
-            token_hash=hash_secret(token),
+            token_hash=hash_secret(token, "invitation"),
             created_at=now,
             expires_at=expires_at,
         )
@@ -209,7 +209,7 @@ class Invitation:
         ):
             raise RuntimeError("mongodb is not connected")
 
-        token_hash = hash_secret(token)
+        token_hash = hash_secret(token, "invitation")
         invitation = await self.db.invitations.find_one({"token_hash": token_hash})
         if not invitation:
             raise InvitationNotFound("invitation not found")
@@ -219,9 +219,12 @@ class Invitation:
 
         now = get_current_time()
         expires_at = invitation["expires_at"]
-        if isinstance(expires_at, str):
-            expires_at = datetime.fromisoformat(expires_at)
-        if now >= expires_at:
+        parsed_expiry = (
+            expires_at
+            if isinstance(expires_at, datetime)
+            else datetime.fromisoformat(expires_at)
+        )
+        if now >= parsed_expiry:
             raise InvitationExpired("invitation expired")
 
         user = await self.db.users.find_one({"_id": ObjectId(user_id)})
@@ -244,7 +247,7 @@ class Invitation:
         if resolve_access(project, user_id) is not None:
             await self.db.invitations.update_one(
                 {"_id": invitation["_id"], "accepted_at": None},
-                {"$set": {"accepted_at": now.isoformat()}},
+                {"$set": {"accepted_at": now}},
             )
             raise InvitationAlreadyAccepted("user is already a member of the project")
 
@@ -253,13 +256,6 @@ class Invitation:
             "role": invitation["role"],
             "environments": invitation.get("environments", []),
         }
-
-        claimed = await self.db.invitations.find_one_and_update(
-            {"_id": invitation["_id"], "accepted_at": None},
-            {"$set": {"accepted_at": now.isoformat()}},
-        )
-        if not claimed:
-            raise InvitationAlreadyAccepted("invitation already accepted")
 
         res = await self.db.projects.update_one(
             {
@@ -270,6 +266,26 @@ class Invitation:
         )
         if not res.matched_count:
             raise ProjectNotFound("project does not exist")
+
+        claimed = await self.db.invitations.find_one_and_update(
+            {"_id": invitation["_id"], "accepted_at": None},
+            {"$set": {"accepted_at": now}},
+        )
+        if not claimed:
+            await self.db.projects.update_one(
+                {
+                    "_id": ObjectId(invitation["project_id"]),
+                    "members": {
+                        "$elemMatch": {
+                            "user_id": user_id,
+                            "role": invitation["role"],
+                            "environments": member["environments"],
+                        }
+                    },
+                },
+                {"$pull": {"members": member}},
+            )
+            raise InvitationAlreadyAccepted("invitation already accepted")
 
         return AcceptInvitationRes(
             project_id=invitation["project_id"],

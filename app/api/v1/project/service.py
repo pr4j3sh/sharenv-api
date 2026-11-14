@@ -95,7 +95,19 @@ class Project:
         if self.db.projects is None:
             raise RuntimeError("mongodb is not connected")
 
-        query: dict = {"$or": [{"user_id": user_id}, {"members.user_id": user_id}]}
+        query: dict = {
+            "$or": [
+                {"user_id": user_id},
+                {
+                    "members": {
+                        "$elemMatch": {
+                            "user_id": user_id,
+                            "role": {"$in": ["writer", "reader"]},
+                        }
+                    }
+                },
+            ]
+        }
 
         if project_name is not None:
             query["name"] = project_name

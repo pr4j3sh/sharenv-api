@@ -54,6 +54,16 @@ class UpdateMemberAccessReq(BaseModel):
     role: Literal["writer", "reader"] | None = None
     password: str
 
+    @field_validator("environments")
+    @classmethod
+    def validate_environments(cls, value: list[str]) -> list[str]:
+        if len(value) > 200:
+            raise ValueError("too many environments")
+        for env_id in value:
+            if not isinstance(env_id, str) or len(env_id) != 24:
+                raise ValueError("invalid environment id")
+        return value
+
     @field_validator("password")
     @classmethod
     def validate_password(cls, value: str) -> str:

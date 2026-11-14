@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     JWT_EXPIRY: int = 15
 
     REFRESH_TOKEN_EXPIRY_DAYS: int = 30
+    REFRESH_RETRY_GRACE_SECONDS: int = 60
 
     ENCRYPTION_KEYS_JSON: str = ""
     ENCRYPTION_KEYS_FILE: str = ""
@@ -58,7 +59,7 @@ class Settings(BaseSettings):
 
     DOCS_ENABLED: bool = False
 
-    ALLOWED_HOSTS: str = "localhost,127.0.0.1,[::1],testserver"
+    ALLOWED_HOSTS: str = "localhost,127.0.0.1,[::1]"
 
     PAGINATION_DEFAULT_LIMIT: int = 50
     PAGINATION_MAX_LIMIT: int = 100

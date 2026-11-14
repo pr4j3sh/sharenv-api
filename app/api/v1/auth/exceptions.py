@@ -30,10 +30,6 @@ class VerifyOtpError(Exception):
     pass
 
 
-class UserNotVerified(Exception):
-    pass
-
-
 class EmailNotConfigured(Exception):
     pass
 

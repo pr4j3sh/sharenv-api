@@ -11,3 +11,5 @@ class UserModel(SerializableDocument):
     otp_expiry: datetime | None = None
     token_version: int = 0
     refresh_jti: str | None = None
+    previous_refresh_jti: str | None = None
+    rotated_at: datetime | None = None

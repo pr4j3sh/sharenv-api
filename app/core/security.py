@@ -65,6 +65,18 @@ def _decode_token(token: str, expected_typ: str) -> dict:
     if payload.get("typ") != expected_typ:
         raise jwt.InvalidTokenError(f"expected a {expected_typ} token")
 
+    ver = payload.get("ver")
+    if not isinstance(ver, int) or isinstance(ver, bool):
+        raise jwt.InvalidTokenError("invalid token version")
+
+    sub = payload.get("sub")
+    if not isinstance(sub, str):
+        raise jwt.InvalidTokenError("invalid subject")
+
+    jti = payload.get("jti")
+    if not isinstance(jti, str):
+        raise jwt.InvalidTokenError("invalid jti")
+
     return payload
 
 

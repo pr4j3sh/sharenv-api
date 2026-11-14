@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -15,7 +15,6 @@ from app.api.v1.auth.exceptions import (
     SendEmailError,
     TooManyAttempts,
     UserAlreadyExists,
-    UserNotVerified,
     VerifyOtpError,
 )
 from app.api.v1.auth.models import UserModel
@@ -39,7 +38,12 @@ from app.core.crypto import (
 )
 from app.core.email import send_email
 from app.core.logger import get_logger, redact_secrets
-from app.core.rate_limit import login_failures, otp_attempts, otp_resends
+from app.core.rate_limit import (
+    login_failures,
+    otp_attempts,
+    otp_resends,
+    resend_ip_limits,
+)
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -67,7 +71,10 @@ class Auth:
             log.exception("failed to roll back registration for %s", user_id)
 
     async def register(self, payload: RegisterReq) -> RegisterRes:
-        log.info("registering user %s", hash_secret(payload.email.strip().lower())[:12])
+        log.info(
+            "registering user %s",
+            hash_secret(payload.email.strip().lower(), "log")[:12],
+        )
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
@@ -122,7 +129,7 @@ class Auth:
         )
 
     async def verify_user(self, email: str, otp: str) -> VerifyUserRes:
-        log.info("verifying user %s", hash_secret(email.strip().lower())[:12])
+        log.info("verifying user %s", hash_secret(email.strip().lower(), "log")[:12])
 
         if not settings.email_enabled:
             raise EmailNotConfigured("email provider is not configured")
@@ -141,22 +148,26 @@ class Auth:
             raise TooManyAttempts(retry_after)
 
         user = await self.db.users.find_one({"email": email})
+        is_verified = bool(user and user.get("is_verified") is True)
+        stored_otp = user.get("otp") if user else None
+        otp_expiry = user.get("otp_expiry") if user else None
 
-        if not user or user.get("is_verified"):
+        if user is None or is_verified or not stored_otp or not otp_expiry:
             verify_otp(dummy_otp_hash(), otp)
             await otp_attempts.record(f"otp:{email}", settings.OTP_EXPIRY * 60)
             raise VerifyOtpError("failed to verify otp")
 
-        stored_otp = user.get("otp")
-        otp_expiry = user.get("otp_expiry")
-
-        if not stored_otp or not otp_expiry:
-            raise VerifyOtpError("no active otp")
-
         now = get_current_time()
 
-        if now >= datetime.fromisoformat(otp_expiry):
-            raise VerifyOtpError("otp expired")
+        expiry = (
+            otp_expiry
+            if isinstance(otp_expiry, datetime)
+            else datetime.fromisoformat(otp_expiry)
+        )
+        if now >= expiry:
+            verify_otp(dummy_otp_hash(), otp)
+            await otp_attempts.record(f"otp:{email}", settings.OTP_EXPIRY * 60)
+            raise VerifyOtpError("failed to verify otp")
 
         if not verify_otp(stored_otp, otp):
             await otp_attempts.record(f"otp:{email}", settings.OTP_EXPIRY * 60)
@@ -168,22 +179,29 @@ class Auth:
             str(user["_id"]), token_version
         )
 
-        res = await self.db.users.update_one(
-            {"_id": user["_id"]},
+        claimed = await self.db.users.find_one_and_update(
+            {"_id": user["_id"], "otp": stored_otp},
             {
-                "$set": {"is_verified": True, "refresh_jti": refresh_jti},
+                "$set": {
+                    "is_verified": True,
+                    "refresh_jti": refresh_jti,
+                    "previous_refresh_jti": None,
+                    "rotated_at": get_current_time(),
+                },
                 "$unset": {"otp": "", "otp_expiry": ""},
             },
         )
-        if not res.acknowledged:
-            raise VerifyOtpError("failed to verify user")
+        if not claimed:
+            raise VerifyOtpError("failed to verify otp")
 
         await otp_attempts.clear(f"otp:{email}")
 
         return VerifyUserRes(token=token, refresh_token=refresh_token)
 
-    async def resend_otp(self, email: str) -> ResendOtpRes:
-        log.info("resending otp for user %s", hash_secret(email.strip().lower())[:12])
+    async def resend_otp(self, email: str, ip: str | None = None) -> ResendOtpRes:
+        log.info(
+            "resending otp for user %s", hash_secret(email.strip().lower(), "log")[:12]
+        )
 
         if not settings.email_enabled:
             raise EmailNotConfigured("email provider is not configured")
@@ -192,6 +210,15 @@ class Auth:
             raise RuntimeError("mongodb is not connected")
 
         email = email.strip().lower()
+
+        if ip is not None:
+            retry_after = await resend_ip_limits.allow(
+                f"resend:{ip}:{email}",
+                settings.OTP_RESEND_LIMIT,
+                settings.OTP_EXPIRY * 60,
+            )
+            if retry_after:
+                raise TooManyAttempts(retry_after)
 
         retry_after = await otp_resends.allow(
             f"resend:{email}",
@@ -214,9 +241,7 @@ class Auth:
             {
                 "$set": {
                     "otp": hash_otp(otp),
-                    "otp_expiry": (
-                        now + timedelta(minutes=settings.OTP_EXPIRY)
-                    ).isoformat(),
+                    "otp_expiry": now + timedelta(minutes=settings.OTP_EXPIRY),
                 }
             },
         )
@@ -232,7 +257,9 @@ class Auth:
         return ResendOtpRes(success=True)
 
     async def login(self, payload: LoginReq) -> LoginRes:
-        log.info("logging in user %s", hash_secret(payload.email.strip().lower())[:12])
+        log.info(
+            "logging in user %s", hash_secret(payload.email.strip().lower(), "log")[:12]
+        )
 
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
@@ -263,7 +290,10 @@ class Auth:
             raise InvalidCredentials("invalid credentials")
 
         if not user.get("is_verified") and settings.email_enabled:
-            raise UserNotVerified("User is unverified")
+            await login_failures.record(
+                f"fail:{email}", settings.LOGIN_LOCKOUT_MINUTES * 60
+            )
+            raise InvalidCredentials("invalid credentials")
 
         token_version = user.get("token_version", 0)
         token = create_access_token(str(user["_id"]), token_version)
@@ -272,7 +302,14 @@ class Auth:
         )
 
         res = await self.db.users.update_one(
-            {"_id": user["_id"]}, {"$set": {"refresh_jti": refresh_jti}}
+            {"_id": user["_id"]},
+            {
+                "$set": {
+                    "refresh_jti": refresh_jti,
+                    "previous_refresh_jti": None,
+                    "rotated_at": get_current_time(),
+                }
+            },
         )
         if not res.acknowledged:
             raise CreateTokenError("Failed to create token")
@@ -309,15 +346,64 @@ class Auth:
         if not user or user.get("token_version", 0) != token_version:
             raise InvalidRefreshToken("invalid refresh token")
 
-        if token_version is None:
-            raise InvalidRefreshToken("invalid refresh token")
+        current_jti = user.get("refresh_jti")
+        now = get_current_time()
+
+        if current_jti != jti:
+            previous_jti = user.get("previous_refresh_jti")
+            rotated_at = user.get("rotated_at")
+            parsed_rotated = None
+            if isinstance(rotated_at, datetime):
+                parsed_rotated = rotated_at
+            elif isinstance(rotated_at, str):
+                try:
+                    parsed_rotated = datetime.fromisoformat(rotated_at)
+                except ValueError:
+                    parsed_rotated = None
+
+            if parsed_rotated is not None and parsed_rotated.tzinfo is not None:
+                parsed_rotated = parsed_rotated.astimezone(UTC).replace(tzinfo=None)
+            naive_now = now.replace(tzinfo=None) if now.tzinfo is not None else now
+
+            can_retry = (
+                previous_jti == jti
+                and parsed_rotated is not None
+                and (naive_now - parsed_rotated).total_seconds()
+                <= settings.REFRESH_RETRY_GRACE_SECONDS
+            )
+
+            if not can_retry:
+                current = await self.db.users.find_one({"_id": user_oid})
+                if current and current.get("token_version", 0) == token_version:
+                    await self.db.users.update_one(
+                        {"_id": user_oid},
+                        {
+                            "$inc": {"token_version": 1},
+                            "$unset": {
+                                "refresh_jti": "",
+                                "previous_refresh_jti": "",
+                                "rotated_at": "",
+                            },
+                        },
+                    )
+                raise InvalidRefreshToken("invalid refresh token")
 
         new_token = create_access_token(str(user_oid), token_version)
         new_refresh_token, new_jti = create_refresh_token(str(user_oid), token_version)
 
         res = await self.db.users.find_one_and_update(
-            {"_id": user_oid, "token_version": token_version, "refresh_jti": jti},
-            {"$set": {"refresh_jti": new_jti}},
+            {
+                "_id": user_oid,
+                "token_version": token_version,
+                "refresh_jti": current_jti,
+            },
+            {
+                "$set": {
+                    "refresh_jti": new_jti,
+                    "previous_refresh_jti": current_jti,
+                    "rotated_at": now,
+                }
+            },
         )
         if not res:
             current = await self.db.users.find_one({"_id": user_oid})
@@ -326,7 +412,11 @@ class Auth:
                     {"_id": user_oid},
                     {
                         "$inc": {"token_version": 1},
-                        "$unset": {"refresh_jti": ""},
+                        "$unset": {
+                            "refresh_jti": "",
+                            "previous_refresh_jti": "",
+                            "rotated_at": "",
+                        },
                     },
                 )
             raise InvalidRefreshToken("invalid refresh token")
@@ -347,7 +437,11 @@ class Auth:
             {"_id": ObjectId(user_id)},
             {
                 "$inc": {"token_version": 1},
-                "$unset": {"refresh_jti": ""},
+                "$unset": {
+                    "refresh_jti": "",
+                    "previous_refresh_jti": "",
+                    "rotated_at": "",
+                },
             },
         )
 

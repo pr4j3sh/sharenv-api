@@ -17,14 +17,18 @@ def generate_otp() -> str:
     return "".join(secrets.choice(string.digits) for _ in range(length))
 
 
-def hash_secret(value: str) -> str:
+def _derive_key(domain: str) -> bytes:
     return hmac.new(
-        settings.JWT_SECRET.encode(), value.encode(), hashlib.sha256
-    ).hexdigest()
+        settings.JWT_SECRET.encode(), domain.encode(), hashlib.sha256
+    ).digest()
+
+
+def hash_secret(value: str, domain: str = "generic") -> str:
+    return hmac.new(_derive_key(domain), value.encode(), hashlib.sha256).hexdigest()
 
 
 def hash_otp(otp: str) -> str:
-    return hash_secret(otp)
+    return hash_secret(otp, "otp")
 
 
 def verify_otp(stored_hash: str, otp: str) -> bool:

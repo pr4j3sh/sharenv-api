@@ -14,7 +14,7 @@ class SerializableDocument(BaseModel):
     def serialize_datetime(self, value: datetime) -> str:
         return value.isoformat()
 
-    @field_serializer("accepted_at", "otp_expiry", check_fields=False)
+    @field_serializer("accepted_at", "otp_expiry", "rotated_at", check_fields=False)
     def serialize_optional_datetime(self, value: datetime | None) -> str | None:
         return value.isoformat() if value else None
 
