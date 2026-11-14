@@ -137,6 +137,8 @@ class Settings(BaseSettings):
     MAX_VARIABLE_NAME_LENGTH: int = 128
     MAX_VARIABLE_VALUE_BYTES: int = 64 * 1024
 
+    NOT_AUTHENTICATED: dict[str, str] = {"WWW-Authenticate": "Bearer"}
+
     _encryption_keys: dict[int, bytes] = PrivateAttr(default_factory=dict)
     _master_ciphers: dict[int, AESGCM] = PrivateAttr(default_factory=dict)
     _dummy_otp_hash: str = PrivateAttr(default="")
@@ -253,5 +255,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-NOT_AUTHENTICATED = {"WWW-Authenticate": "Bearer"}
