@@ -10,9 +10,6 @@ from fastapi import HTTPException
 
 from app.core.config import settings
 
-PROJECT_ENV_NAME_RE = re.compile(r"^[a-z0-9_-]+$")
-VARIABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
 
 def parse_object_id(value: str, *, label: str = "id") -> ObjectId:
     try:
@@ -45,7 +42,7 @@ def validate_variable_name(name: str) -> str:
             f"Variable name must be at most "
             f"{settings.MAX_VARIABLE_NAME_LENGTH} characters"
         )
-    if not VARIABLE_NAME_RE.fullmatch(name):
+    if not re.fullmatch(r"^[A-Za-z_][A-Za-z0-9_]*$", name):
         raise ValueError(
             "Variable name must start with a letter or underscore and contain only "
             "letters, numbers, and underscores"
@@ -63,7 +60,7 @@ def validate_project_env_name(value: str, *, kind: str) -> str:
             f"{kind} name must be at most "
             f"{settings.MAX_PROJECT_ENV_NAME_LENGTH} characters"
         )
-    if not PROJECT_ENV_NAME_RE.fullmatch(value):
+    if not re.fullmatch(r"^[a-z0-9_-]+$", value):
         raise ValueError(
             f"{kind} name must contain only lowercase letters, numbers, hyphens, "
             "and underscores."
