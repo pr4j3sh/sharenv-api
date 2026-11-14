@@ -1,6 +1,13 @@
 # sharenv-api — security remediation plan
 
-Companion plan for the CLI lives at `../sharenv/plan.md`.
+> **Status (November 2026):** this plan originated before the November
+> security review and hardening commits. The checklist below is now largely
+> historical: see `docs/security.md` ("Current gaps") for the live gap list
+> and `docs/security-review.md` for the review checklist. It is kept for
+> traceability. Checkbox state below reflects the work as merged, not as
+> originally specified.
+>
+> Companion plan for the CLI lives at `../sharenv/plan.md`.
 
 This plan is ordered by risk. Work top-to-bottom where possible. Each task is a
 single reviewable change. `P0` = do before storing real production secrets,

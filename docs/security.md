@@ -85,8 +85,9 @@ Decisions recorded here:
   `JWT_SECRET` is loaded from the container environment today. See the gaps
   table.
 - **Verification OTPs are peppered, not plaintext.** Account verification
-  codes are stored as HMAC-SHA256 keyed with `JWT_SECRET`, so a database-only
-  attacker cannot use them to verify accounts. They are short-lived (10
+  codes are stored as HMAC-SHA256 with a purpose-specific key derived from
+  `JWT_SECRET` (the `otp` domain), so a database-only attacker cannot use
+  them to verify accounts. They are short-lived (10
   minutes by default) and are delivered by email through the configured
   provider (`smtp` or `resend`), which therefore sees recipient addresses and
   OTPs. When `EMAIL_PROVIDER=none` no OTP is generated at all and verification
@@ -309,9 +310,6 @@ writing.
 | Auth rate limiting is in-memory and per-process                                      | Counters reset on restart and are not shared across uvicorn workers (nginx adds a coarse outer limit)  | §3, §9 |
 | Per-email login lockout is an account-availability DoS surface                       | An attacker can lock out any email address by sending failures                                        | §3     |
 | No membership-change audit trail                                                    | Limited attribution for invitations, role/grant changes, and removals                                  | §4, §7 |
-| Variable names are not validated                                                    | Newline/`=`/`#` injection into clients' `.env` files; AAD ambiguity                                   | §5     |
-| No unique indexes; `ObjectId` not validated                                         | Duplicate races; invalid ids return `500`                                                             | §5     |
-| `Cache-Control: no-store` only on `/v1/variable`                                    | Auth and project/environment responses may be cached                                                  | §6     |
 | No audit log; some PII/names still appear in logs                                   | Limited detection/attribution; metadata may leak into logs                                            | §7     |
 | Bundled MongoDB has no authentication or TLS                                        | Anyone who can reach it reads everything                                                              | §8     |
 | HTTP-only fallback; `Host`-based redirect                                           | Plaintext exposure and open redirect                                                                  | §9     |
