@@ -10,11 +10,9 @@ class Health:
         self.db = mongo
 
     async def liveness(self) -> HealthRes:
-        """The process is up and serving; no dependency checks."""
         return HealthRes()
 
     async def readiness(self) -> ReadyRes:
-        """The app can serve traffic; every dependency check must pass."""
         checks: dict[str, CheckState] = {"mongo": await self._mongo_status()}
         status: CheckState = (
             "ok" if all(state == "ok" for state in checks.values()) else "unavailable"

@@ -1,8 +1,17 @@
 """Sanitizers for error responses and the shared 422 handler."""
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+
+
+def too_many_attempts(retry_after: int) -> HTTPException:
+    """429 Too Many Requests with a Retry-After header."""
+    return HTTPException(
+        status_code=429,
+        detail="Too many requests",
+        headers={"Retry-After": str(retry_after)},
+    )
 
 
 def sanitized_validation_detail(exc: RequestValidationError) -> list[dict[str, object]]:

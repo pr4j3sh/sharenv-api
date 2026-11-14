@@ -31,6 +31,7 @@ from app.api.v1.auth.schemas import (
 )
 from app.api.v1.auth.service import Auth
 from app.core.dependencies import get_current_user_id
+from app.core.errors import too_many_attempts
 from app.core.logger import get_logger
 from app.core.rate_limit import enforce_auth_ip_limit
 
@@ -41,14 +42,6 @@ router = APIRouter(
 )
 
 log = get_logger(__name__)
-
-
-def _too_many_attempts(e: TooManyAttempts) -> HTTPException:
-    return HTTPException(
-        status_code=429,
-        detail="Too many requests",
-        headers={"Retry-After": str(e.retry_after)},
-    )
 
 
 @router.post("/register", response_model=RegisterRes)
@@ -78,7 +71,7 @@ async def register(req: RegisterReq) -> RegisterRes:
             detail=str(e),
         ) from e
     except TooManyAttempts as e:
-        raise _too_many_attempts(e) from e
+        raise too_many_attempts(e.retry_after) from e
     except Exception as e:
         log.exception("registration failed unexpectedly")
         raise HTTPException(
@@ -94,7 +87,6 @@ async def login(req: LoginReq) -> LoginRes:
         res = await a.login(req)
         return res
     except InvalidCredentials as e:
-        # Unknown email and wrong password land here identically.
         raise HTTPException(
             status_code=401,
             detail=str(e),
@@ -105,7 +97,7 @@ async def login(req: LoginReq) -> LoginRes:
             detail="email_not_verified",
         ) from e
     except TooManyAttempts as e:
-        raise _too_many_attempts(e) from e
+        raise too_many_attempts(e.retry_after) from e
     except CreateTokenError as e:
         raise HTTPException(
             status_code=500,
@@ -131,7 +123,7 @@ async def refresh(req: RefreshReq) -> RefreshRes:
             detail=str(e),
         ) from e
     except TooManyAttempts as e:
-        raise _too_many_attempts(e) from e
+        raise too_many_attempts(e.retry_after) from e
     except Exception as e:
         log.exception("token refresh failed unexpectedly")
         raise HTTPException(
@@ -171,14 +163,12 @@ async def verify_user(req: VerifyUserReq) -> VerifyUserRes:
             detail=str(e),
         ) from e
     except VerifyOtpError as e:
-        # Unknown email, wrong/expired OTP and already-verified accounts all
-        # land here as the same 401.
         raise HTTPException(
             status_code=401,
             detail=str(e),
         ) from e
     except TooManyAttempts as e:
-        raise _too_many_attempts(e) from e
+        raise too_many_attempts(e.retry_after) from e
     except CreateTokenError as e:
         raise HTTPException(
             status_code=500,
@@ -214,7 +204,7 @@ async def resend_otp(req: ResendOtpReq) -> ResendOtpRes:
             detail=str(e),
         ) from e
     except TooManyAttempts as e:
-        raise _too_many_attempts(e) from e
+        raise too_many_attempts(e.retry_after) from e
     except Exception as e:
         log.exception("otp resend failed unexpectedly")
         raise HTTPException(
