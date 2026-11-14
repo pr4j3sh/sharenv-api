@@ -24,9 +24,10 @@ from app.api.v1.project.exceptions import (
     ProjectNotFound,
     ReauthenticationFailed,
 )
+from app.core.config import settings
 from app.core.dependencies import get_current_user_id
 from app.core.logger import get_logger
-from app.core.validation import MAX_INVITATION_TOKEN_LENGTH, parse_object_id
+from app.core.validation import parse_object_id
 
 router = APIRouter(tags=["Invitation"])
 
@@ -107,7 +108,7 @@ async def accept_invitation(
     token: str,
     user_id: Annotated[str, Depends(get_current_user_id)],
 ) -> AcceptInvitationRes:
-    if not token or len(token) > MAX_INVITATION_TOKEN_LENGTH:
+    if not token or len(token) > settings.MAX_INVITATION_TOKEN_LENGTH:
         raise HTTPException(status_code=400, detail="invalid invitation token")
     try:
         svc = Invitation()

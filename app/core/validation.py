@@ -8,22 +8,10 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import HTTPException
 
+from app.core.config import settings
+
 PROJECT_ENV_NAME_RE = re.compile(r"^[a-z0-9_-]+$")
 VARIABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-MAX_PROJECT_ENV_NAME_LENGTH = 64
-MAX_VARIABLE_NAME_LENGTH = 128
-MAX_VARIABLE_VALUE_BYTES = 64 * 1024
-MAX_EMAIL_LENGTH = 254
-MAX_OTP_LENGTH = 16
-MAX_REFRESH_TOKEN_LENGTH = 4096
-MAX_INVITATION_TOKEN_LENGTH = 512
-MAX_REQUEST_BODY_BYTES = 256 * 1024
-
-DEFAULT_MAX_PROJECTS_PER_USER = 50
-DEFAULT_MAX_ENVIRONMENTS_PER_PROJECT = 50
-DEFAULT_MAX_VARIABLES_PER_ENVIRONMENT = 500
-DEFAULT_MAX_TOTAL_VALUE_BYTES_PER_PROJECT = 5 * 1024 * 1024
 
 
 def parse_object_id(value: str, *, label: str = "id") -> ObjectId:
@@ -52,9 +40,10 @@ def validate_variable_name(name: str) -> str:
         raise ValueError("Variable name must be a string")
     if not name:
         raise ValueError("Variable name must not be empty")
-    if len(name) > MAX_VARIABLE_NAME_LENGTH:
+    if len(name) > settings.MAX_VARIABLE_NAME_LENGTH:
         raise ValueError(
-            f"Variable name must be at most {MAX_VARIABLE_NAME_LENGTH} characters"
+            f"Variable name must be at most "
+            f"{settings.MAX_VARIABLE_NAME_LENGTH} characters"
         )
     if not VARIABLE_NAME_RE.fullmatch(name):
         raise ValueError(
@@ -69,9 +58,10 @@ def validate_project_env_name(value: str, *, kind: str) -> str:
         raise ValueError(f"{kind} name must be a string")
     if not value:
         raise ValueError(f"{kind} name must not be empty")
-    if len(value) > MAX_PROJECT_ENV_NAME_LENGTH:
+    if len(value) > settings.MAX_PROJECT_ENV_NAME_LENGTH:
         raise ValueError(
-            f"{kind} name must be at most {MAX_PROJECT_ENV_NAME_LENGTH} characters"
+            f"{kind} name must be at most "
+            f"{settings.MAX_PROJECT_ENV_NAME_LENGTH} characters"
         )
     if not PROJECT_ENV_NAME_RE.fullmatch(value):
         raise ValueError(
@@ -86,8 +76,8 @@ def validate_variable_value_size(value: Any) -> Any:
         encoded = json.dumps(value).encode("utf-8")
     except (TypeError, ValueError) as e:
         raise ValueError("Variable value must be a JSON-serializable scalar") from e
-    if len(encoded) > MAX_VARIABLE_VALUE_BYTES:
+    if len(encoded) > settings.MAX_VARIABLE_VALUE_BYTES:
         raise ValueError(
-            f"Variable value must be at most {MAX_VARIABLE_VALUE_BYTES} bytes"
+            f"Variable value must be at most {settings.MAX_VARIABLE_VALUE_BYTES} bytes"
         )
     return value

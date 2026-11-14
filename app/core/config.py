@@ -129,6 +129,13 @@ class Settings(BaseSettings):
     MAX_VARIABLES_PER_ENVIRONMENT: int = 500
     MAX_TOTAL_VALUE_BYTES_PER_PROJECT: int = 5 * 1024 * 1024
     MAX_REQUEST_BODY_BYTES: int = 256 * 1024
+    MAX_EMAIL_LENGTH: int = 254
+    MAX_OTP_LENGTH: int = 16
+    MAX_REFRESH_TOKEN_LENGTH: int = 4096
+    MAX_INVITATION_TOKEN_LENGTH: int = 512
+    MAX_PROJECT_ENV_NAME_LENGTH: int = 64
+    MAX_VARIABLE_NAME_LENGTH: int = 128
+    MAX_VARIABLE_VALUE_BYTES: int = 64 * 1024
 
     _encryption_keys: dict[int, bytes] = PrivateAttr(default_factory=dict)
     _master_ciphers: dict[int, AESGCM] = PrivateAttr(default_factory=dict)

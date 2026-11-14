@@ -8,13 +8,13 @@ from pydantic import (
     field_validator,
 )
 
+from app.core.config import settings
 from app.core.serialization import MongoDocument, SerializableDocument
 from app.core.utils import validate_password_size
-from app.core.validation import MAX_EMAIL_LENGTH
 
 
 class CreateInvitationReq(BaseModel):
-    email: EmailStr = Field(max_length=MAX_EMAIL_LENGTH)
+    email: EmailStr = Field(max_length=settings.MAX_EMAIL_LENGTH)
     role: Literal["writer", "reader"]
     environments: list[str] = Field(default_factory=list)
     password: str
