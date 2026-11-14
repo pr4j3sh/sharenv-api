@@ -28,6 +28,11 @@ curl http://localhost/health
 ```
 
 > Expected response: `{ "status": "ok", "checks": { "app": "ok" } }`
+>
+> If `docker compose ps` shows the API restarting, check `docker compose logs api`.
+> The most common cause is the master key registry file being unreadable by the
+> container's non-root user — see [Configure secrets](#configure-secrets) for
+> the required `chown`.
 
 To use different host ports:
 
@@ -63,9 +68,17 @@ Then continue with [HTTPS](#enable-https-on-your-server) if you need it.
 
   ```bash
   mkdir -p deploy/secrets
-  umask 077
   printf '{"1": "%s"}\n' "$(openssl rand -base64 32)" > deploy/secrets/encryption_keys.json
+  chown 10001:10001 deploy/secrets/encryption_keys.json
+  chmod 0640 deploy/secrets/encryption_keys.json
   ```
+
+  > The image runs as a non-root user (uid/gid `10001`), and Compose file-backed
+  > secrets are plain bind mounts: the file's host owner and permissions are
+  > preserved inside the container. `chown` to the container's uid is required,
+  > otherwise the API crashes at startup with an `EACCES` reading the registry.
+  > Do not make the file world-readable (e.g. `chmod 0644`) unless the host is
+  > private.
 
   > `ENCRYPTION_KEYS_FILE` in `.env.docker` already points at the in-container path `/run/secrets/encryption_keys`, and `ENCRYPTION_KEY_VERSION=1` marks that key active. Rotating the master key is documented in [docs/key-rotation.md](key-rotation.md).
 
