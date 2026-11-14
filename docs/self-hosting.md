@@ -1,19 +1,12 @@
 # Self-hosting sharenv-api
 
-This guide deploys sharenv-api with Docker Compose: the API runs as the
-published multi-arch image from Docker Hub (`pr4j3sh/sharenv-api`, tags
-`X.Y.Z`, `X.Y`, and `latest`), fronted by nginx. nginx serves HTTP by
-default and switches to HTTPS automatically when provided with certificates.
 To run from source instead (development), see
 [docs/development.md](development.md).
-
-> Pin a version in production (e.g. `pr4j3sh/sharenv-api:0.2.0`); `latest`
-> is for convenience.
 
 ## Requirements
 
 - Docker Engine with the Compose plugin (`docker compose`)
-- A MongoDB instance reachable by the API
+- A MongoDB instance
 - Ports 80 and 443 available (configurable)
 - OpenSSL for generating secrets
 
@@ -24,13 +17,10 @@ git clone https://github.com/pr4j3sh/sharenv-api.git
 cd sharenv-api
 ```
 
-The bundled `compose.yaml` runs the image as `pr4j3sh/sharenv-api:latest`;
-to pin a version, edit the `image:` line in the `api` service.
-
-- Configure secrets — see [Configure secrets](#configure-secrets)
+- Configure secrets [Configure secrets](#configure-secrets)
 - Point at your MongoDB — see [Setup MongoDB](#setup-mongodb)
 
-Then start the stack and check health:
+Start the stack and check health:
 
 ```bash
 docker compose up -d
@@ -156,11 +146,7 @@ INVITATION_EXPIRY_DAYS=7    # days before a pending project invitation expires
 
 ## Setup MongoDB
 
-The bundled stack ships no database. Edit `MONGO_URI` in `.env.docker`
-(point at your managed service or your own instance — Atlas,
-DocumentDB-compatible, a separate container, a VM…). The API pings MongoDB
-at startup and exits if it cannot reach it, so it won't serve before the
-database is ready.
+Edit `MONGO_URI` in `.env.docker`.
 
 Include credentials in the URI if your database requires authentication, for example:
 
