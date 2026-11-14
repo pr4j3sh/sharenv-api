@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env.docker
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     expose:
       - "8000"
     healthcheck:

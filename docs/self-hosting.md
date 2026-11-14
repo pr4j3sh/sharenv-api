@@ -160,9 +160,17 @@ INVITATION_EXPIRY_DAYS=7    # days before a pending project invitation expires
 
 ## Setup MongoDB
 
-Edit `MONGO_URI` in `.env.docker`.
+The bundled stack ships no database. Edit `MONGO_URI` in `.env.docker` — the API pings MongoDB at startup and exits if it cannot reach it, so it won't serve before the database is ready.
 
-Include credentials in the URI if your database requires authentication, for example:
+To use a MongoDB running on this host (e.g. a separate container publishing `27017`):
+
+```env
+MONGO_URI=mongodb://host.docker.internal:27017/sharenv
+```
+
+`host.docker.internal` is mapped to the Compose gateway by the bundled `compose.yaml`, so it works on Linux as well as Docker Desktop. Do not use `127.0.0.1` — that's the API container itself, not the host.
+
+To use a managed or remote MongoDB, put its URI in `MONGO_URI` instead, ideally with a database name, e.g.:
 
 ```env
 MONGO_URI=mongodb://user:password@db.example.com:27017/?authSource=admin
