@@ -1,6 +1,8 @@
 # Self-hosting sharenv-api
 
-This guide deploys sharenv-api with Docker Compose, MongoDB, and nginx. nginx serves HTTP by default and switches to HTTPS automatically when provided with certificates.
+This guide deploys sharenv-api with Docker Compose, MongoDB, and nginx.
+
+> nginx serves HTTP by default and switches to HTTPS automatically when provided with certificates.
 
 ## Requirements
 
@@ -14,10 +16,11 @@ This guide deploys sharenv-api with Docker Compose, MongoDB, and nginx. nginx se
 ```bash
 cp .env.docker.example .env.docker
 openssl rand -hex 32     # JWT_SECRET
-openssl rand -base64 32  # master key
 ```
 
-> Put the JWT value into `JWT_SECRET` in `.env.docker`.
+> Put the JWT value into `JWT_SECRET` in `.env.docker`. Don't create a
+> master key here — it goes into the registry you create in the next step,
+> not into `.env.docker`.
 
 Create the master key registry — a JSON object mapping key versions to keys.
 Compose mounts it into the API container as a Docker secret, so the master key
@@ -79,13 +82,13 @@ EMAIL_FROM=sharenv <sharenv@abc.com>
 
 Works with: an internal Postfix relay, Google Workspace SMTP relay
 (`smtp-relay.gmail.com`, registered IPs or SMTP AUTH with a service mailbox),
-Microsoft 365 (`smtp.office365.com:587` — enable *Authenticated SMTP* for a
+Microsoft 365 (`smtp.office365.com:587` — enable _Authenticated SMTP_ for a
 service mailbox; basic-auth SMTP is being deprecated), or the SMTP endpoint of
 any transactional provider (SES, SendGrid, Mailgun…). Intra-org delivery
 through your own relay needs no SPF/DKIM/DMARC work.
 
 With a provider configured, OTP verification is enforced as usual, invitation
-emails are sent, and the invitation token is *also* returned in the API
+emails are sent, and the invitation token is _also_ returned in the API
 response as a fallback. Email delivery is best-effort: an SMTP outage does not
 block invites (`email_sent: false` in the response tells you to share the
 token yourself).
@@ -141,7 +144,7 @@ curl http://localhost/health
 Expected response:
 
 ```json
-{"status": "ok", "checks": {"app": "ok"}}
+{ "status": "ok", "checks": { "app": "ok" } }
 ```
 
 `/health` is the liveness probe — it only proves the process is up. `/health/ready` is the readiness probe: it pings MongoDB (2s timeout) and returns `200 {"status": "ok", "checks": {"mongo": "ok"}}` when the database is reachable, or `503 {"status": "unavailable", "checks": {"mongo": "unavailable"}}` otherwise. Point your orchestrator's readiness/liveness probes here; the bundled Docker `HEALTHCHECK` intentionally uses `/health`.
