@@ -129,6 +129,8 @@ class Settings(BaseSettings):
     MAX_REQUEST_BODY_BYTES: int = 256 * 1024
 
     _encryption_keys: dict[int, bytes] = PrivateAttr(default_factory=dict)
+    _master_ciphers: dict[int, AESGCM] = PrivateAttr(default_factory=dict)
+    _dummy_otp_hash: str = PrivateAttr(default="")
 
     @field_validator("JWT_SECRET")
     @classmethod
@@ -183,6 +185,24 @@ class Settings(BaseSettings):
     def encryption_keys(self) -> dict[int, bytes]:
         return self._encryption_keys
 
+    def master_cipher(self, key_version: int) -> AESGCM:
+        if not self._master_ciphers:
+            self._master_ciphers = {
+                version: AESGCM(key) for version, key in self._encryption_keys.items()
+            }
+        cipher = self._master_ciphers.get(key_version)
+        if cipher is None:
+            raise ValueError(f"key version {key_version} is not in the key registry")
+        return cipher
+
+    def dummy_otp_hash(self) -> str:
+        if not self._dummy_otp_hash:
+            value = secrets.token_urlsafe(32)
+            self._dummy_otp_hash = hmac.new(
+                self.JWT_SECRET.encode(), value.encode(), hashlib.sha256
+            ).hexdigest()
+        return self._dummy_otp_hash
+
     def allowed_hosts(self) -> list[str]:
         return [host.strip() for host in self.ALLOWED_HOSTS.split(",") if host.strip()]
 
@@ -216,13 +236,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
-MASTER_CIPHERS: dict[int, AESGCM] = {
-    version: AESGCM(key) for version, key in settings.encryption_keys().items()
-}
-
-DUMMY_OTP_HASH: str = hmac.new(
-    settings.JWT_SECRET.encode(),
-    secrets.token_urlsafe(32).encode(),
-    hashlib.sha256,
-).hexdigest()

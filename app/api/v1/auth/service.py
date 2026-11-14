@@ -32,7 +32,6 @@ from app.api.v1.auth.schemas import (
 )
 from app.core.config import settings
 from app.core.crypto import (
-    DUMMY_OTP_HASH,
     generate_otp,
     hash_otp,
     hash_secret,
@@ -145,7 +144,7 @@ class Auth:
         user = await self.db.users.find_one({"email": email})
 
         if not user or user.get("is_verified"):
-            verify_otp(DUMMY_OTP_HASH, otp)
+            verify_otp(settings.dummy_otp_hash(), otp)
             await otp_attempts.record(f"otp:{email}", settings.OTP_EXPIRY * 60)
             raise VerifyOtpError("failed to verify otp")
 

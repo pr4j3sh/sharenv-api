@@ -8,8 +8,7 @@ import string
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from app.core.config import DUMMY_OTP_HASH as DUMMY_OTP_HASH
-from app.core.config import MASTER_CIPHERS, settings
+from app.core.config import settings
 
 
 def generate_otp() -> str:
@@ -35,14 +34,6 @@ def generate_invitation_token() -> str:
     return secrets.token_urlsafe(32)
 
 
-def _master_cipher(key_version: int) -> AESGCM:
-    cipher = MASTER_CIPHERS.get(key_version)
-    if cipher is None:
-        raise ValueError(f"key version {key_version} is not in the key registry")
-
-    return cipher
-
-
 def get_data_key() -> bytes:
     return secrets.token_bytes(settings.TOKEN_BYTES)
 
@@ -50,7 +41,7 @@ def get_data_key() -> bytes:
 def wrap_data_key(data_key: bytes) -> str:
     nonce = os.urandom(settings.NONCE_SIZE)
 
-    ciphertext = _master_cipher(settings.ENCRYPTION_KEY_VERSION).encrypt(
+    ciphertext = settings.master_cipher(settings.ENCRYPTION_KEY_VERSION).encrypt(
         nonce,
         data_key,
         settings.KEY_INFO.encode(),
@@ -65,7 +56,7 @@ def unwrap_data_key(wrapped_key: str, key_version: int) -> bytes:
     if len(raw) <= settings.NONCE_SIZE:
         raise ValueError("invalid wrapped data key")
 
-    return _master_cipher(key_version).decrypt(
+    return settings.master_cipher(key_version).decrypt(
         raw[: settings.NONCE_SIZE],
         raw[settings.NONCE_SIZE :],
         settings.KEY_INFO.encode(),
