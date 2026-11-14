@@ -8,9 +8,8 @@ import string
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from app.core.config import settings
-
-_master_ciphers: dict[int, AESGCM] | None = None
+from app.core.config import DUMMY_OTP_HASH as DUMMY_OTP_HASH
+from app.core.config import MASTER_CIPHERS, settings
 
 
 def generate_otp() -> str:
@@ -32,22 +31,12 @@ def verify_otp(stored_hash: str, otp: str) -> bool:
     return secrets.compare_digest(stored_hash, hash_otp(otp))
 
 
-DUMMY_OTP_HASH = hash_otp(secrets.token_urlsafe(32))
-
-
 def generate_invitation_token() -> str:
     return secrets.token_urlsafe(32)
 
 
 def _master_cipher(key_version: int) -> AESGCM:
-    global _master_ciphers
-
-    if _master_ciphers is None:
-        _master_ciphers = {
-            version: AESGCM(key) for version, key in settings.encryption_keys().items()
-        }
-
-    cipher = _master_ciphers.get(key_version)
+    cipher = MASTER_CIPHERS.get(key_version)
     if cipher is None:
         raise ValueError(f"key version {key_version} is not in the key registry")
 

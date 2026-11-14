@@ -1,8 +1,12 @@
 import base64
+import hashlib
+import hmac
 import json
+import secrets
 from pathlib import Path
 from typing import Literal
 
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from pydantic import PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -212,3 +216,13 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+MASTER_CIPHERS: dict[int, AESGCM] = {
+    version: AESGCM(key) for version, key in settings.encryption_keys().items()
+}
+
+DUMMY_OTP_HASH: str = hmac.new(
+    settings.JWT_SECRET.encode(),
+    secrets.token_urlsafe(32).encode(),
+    hashlib.sha256,
+).hexdigest()
