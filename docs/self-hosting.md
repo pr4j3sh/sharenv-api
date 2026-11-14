@@ -69,10 +69,8 @@ Then continue with [HTTPS](#enable-https-on-your-server) if you need it.
   > The image runs as a non-root user (uid/gid `10001`), and Compose file-backed secrets are plain bind mounts: the file's host owner and mode are preserved inside the container. Give the file either of the following permissions:
   >
   > ```bash
-  > # preferred (needs root/sudo): keep it owner-only
-  > sudo chown 10001:10001 deploy/secrets/encryption_keys.json && chmod 0640 deploy/secrets/encryption_keys.json
-  >
-  > # simplest (no root): world-readable, acceptable on a dedicated host
+  > sudo chown 10001:10001 deploy/secrets/encryption_keys.json
+  > sudo chmod 0640 deploy/secrets/encryption_keys.json
   > chmod 0644 deploy/secrets/encryption_keys.json
   > ```
   >
