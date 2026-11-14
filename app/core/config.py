@@ -8,7 +8,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _parse_key_registry(raw: str) -> dict[int, bytes]:
-    """Parse a {"<version>": "<base64 32-byte key>"} master key registry."""
     try:
         registry = json.loads(raw)
     except json.JSONDecodeError as e:
@@ -67,9 +66,6 @@ class Settings(BaseSettings):
 
     REFRESH_TOKEN_EXPIRY_DAYS: int = 30
 
-    # Master key registry: either inline JSON ({"<version>": "<base64 key>"})
-    # or a path to a file containing the same JSON (e.g. a Docker secret).
-    # ENCRYPTION_KEY_VERSION is the active version used for new writes.
     ENCRYPTION_KEYS_JSON: str = ""
     ENCRYPTION_KEYS_FILE: str = ""
     ENCRYPTION_KEY_VERSION: int = 1
@@ -77,13 +73,6 @@ class Settings(BaseSettings):
     TOKEN_BYTES: int = 32
     KEY_INFO: str = "sharenv:project-key:v1"
 
-    # Email provider:
-    #   none    — default. No mail is sent; accounts stay unverified and
-    #             unverified users may log in. Invites are shared out-of-band
-    #             via the token returned by the invitation endpoint.
-    #   console — log delivery (dev only; never enable DEBUG in production)
-    #   smtp    — generic SMTP relay (org mail infra, Workspace, M365, SES…)
-    #   resend  — Resend API (requires RESEND_API_KEY)
     EMAIL_PROVIDER: Literal["none", "console", "smtp", "resend"] = "none"
     RESEND_API_KEY: str = ""
     EMAIL_FROM: str = "sharenv <sharenv@localhost>"
@@ -93,37 +82,28 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_TLS: Literal["starttls", "ssl", "none"] = "starttls"
-    SMTP_TIMEOUT: int = 10  # seconds
+    SMTP_TIMEOUT: int = 10
 
     OTP_EXPIRY: int = 10
     OTP_LENGTH: int = 6
 
-    # Timeout (seconds) for a MongoDB ping, e.g. the /health/ready probe.
     MONGO_PING_TIMEOUT_SECONDS: float = 2.0
 
-    # Auth rate limiting. The app-level counters are in-memory and
-    # single-process only; nginx adds a coarse outer limit (deploy/nginx/).
-    AUTH_RATE_LIMIT_PER_IP: int = 30  # requests per minute across /v1/auth/*
-    LOGIN_FAILURE_LIMIT: int = 5  # failed logins per email before lockout
+    AUTH_RATE_LIMIT_PER_IP: int = 30
+    LOGIN_FAILURE_LIMIT: int = 5
     LOGIN_LOCKOUT_MINUTES: int = 15
-    OTP_VERIFY_ATTEMPTS: int = 10  # wrong OTP guesses per email per OTP lifetime
-    OTP_RESEND_LIMIT: int = 3  # OTP resends per email per OTP lifetime
+    OTP_VERIFY_ATTEMPTS: int = 10
+    OTP_RESEND_LIMIT: int = 3
 
     INVITATION_EXPIRY_DAYS: int = 7
 
-    # API docs (/docs, /redoc, /openapi.json); disabled by default.
     DOCS_ENABLED: bool = False
 
-    # Explicit Host allowlist for TrustedHostMiddleware. Comma-separated.
-    # Set to the public hostname(s) in production (e.g. "sharenv.example.com").
     ALLOWED_HOSTS: str = "localhost,127.0.0.1,[::1],testserver"
 
-    # Pagination for list endpoints. Responses remain JSON lists; totals and
-    # the next offset are exposed via X-Total-Count/X-Limit/X-Offset/X-Next-Offset.
     PAGINATION_DEFAULT_LIMIT: int = 50
     PAGINATION_MAX_LIMIT: int = 100
 
-    # Guard for JSON request bodies in addition to the byte limit.
     JSON_MAX_DEPTH: int = 32
     JSON_MAX_NODES: int = 10000
 
@@ -138,8 +118,6 @@ class Settings(BaseSettings):
         "letmein12345",
     }
 
-    # Input validation quotas (DB is treated as temporary; counts are best-effort
-    # under concurrency without transactional counters).
     MAX_PROJECTS_PER_USER: int = 50
     MAX_ENVIRONMENTS_PER_PROJECT: int = 50
     MAX_VARIABLES_PER_ENVIRONMENT: int = 500
@@ -199,12 +177,9 @@ class Settings(BaseSettings):
         return self
 
     def encryption_keys(self) -> dict[int, bytes]:
-        """Configured master keys by version; the active version is
-        ENCRYPTION_KEY_VERSION."""
         return self._encryption_keys
 
     def allowed_hosts(self) -> list[str]:
-        """Parsed explicit host allowlist for TrustedHostMiddleware."""
         return [host.strip() for host in self.ALLOWED_HOSTS.split(",") if host.strip()]
 
     @model_validator(mode="after")
@@ -228,13 +203,6 @@ class Settings(BaseSettings):
 
     @property
     def email_enabled(self) -> bool:
-        """True when the OTP verification flow is active.
-
-        True for smtp/resend/console providers, and also when DEBUG is set
-        (DEBUG skips delivery and logs the OTP instead — the long-standing
-        local-development behavior). Only EMAIL_PROVIDER=none without DEBUG
-        disables verification.
-        """
         return self.DEBUG or self.EMAIL_PROVIDER != "none"
 
 

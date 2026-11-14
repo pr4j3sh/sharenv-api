@@ -1,5 +1,3 @@
-"""ASGI middleware: bounded bodies, JSON depth guard, and response headers."""
-
 from __future__ import annotations
 
 import json
@@ -101,8 +99,6 @@ def _json_within_limits(
 
 
 class SecurityMiddleware:
-    """Enforce request limits and add security/cache headers to responses."""
-
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
@@ -147,7 +143,6 @@ class SecurityMiddleware:
             message_type = message.get("type")
 
             if message_type == "http.disconnect":
-                # The client went away; there is no response worth sending.
                 return
 
             if message_type != "http.request":
@@ -180,7 +175,6 @@ class SecurityMiddleware:
                 )
                 return
             except Exception:
-                # Let FastAPI/pydantic produce the usual 422 for malformed JSON.
                 parsed = None
             else:
                 if not _json_within_limits(
@@ -281,12 +275,7 @@ class SecurityMiddleware:
 
 
 def register_middlewares(app: FastAPI) -> None:
-    # Keep body/JSON limits and response headers in a single ASGI layer so
-    # early 413/400 responses get the same headers as normal responses.
     app.add_middleware(SecurityMiddleware)
-    # Starlette applies the last-registered middleware outermost. Keep the
-    # host allowlist last so disallowed hosts are rejected before the request
-    # body is read and before any other processing runs.
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=settings.allowed_hosts()

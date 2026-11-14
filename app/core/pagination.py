@@ -1,5 +1,3 @@
-"""Pagination helpers for list endpoints."""
-
 from __future__ import annotations
 
 from typing import Annotated
@@ -10,8 +8,6 @@ from app.core.config import settings
 
 
 class PaginationParams:
-    """Shared ``limit``/``offset`` query parameters for list endpoints."""
-
     def __init__(
         self,
         limit: Annotated[
@@ -31,7 +27,6 @@ def set_pagination_headers(
     offset: int,
     item_count: int,
 ) -> None:
-    """Expose pagination metadata without changing list response bodies."""
     response.headers["X-Total-Count"] = str(total)
     response.headers["X-Limit"] = str(limit)
     response.headers["X-Offset"] = str(offset)

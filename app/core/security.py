@@ -10,9 +10,6 @@ from app.core.utils import get_current_time
 
 password_hash = PasswordHash.recommended()
 
-# Verified against when the email is unknown so login timing cannot be used
-# to distinguish existing accounts: an Argon2 verify costs the same whether
-# or not the hash corresponds to a real user.
 DUMMY_HASH = password_hash.hash(secrets.token_urlsafe(32))
 
 
@@ -57,7 +54,6 @@ def create_access_token(subject: str, token_version: int) -> str:
 
 
 def create_refresh_token(subject: str, token_version: int) -> tuple[str, str]:
-    """Returns (token, jti); the jti is stored to make the token single-use."""
     return _create_token(subject, token_version, "refresh")
 
 

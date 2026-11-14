@@ -69,7 +69,6 @@ class Auth:
             log.exception("failed to roll back registration for %s", user_id)
 
     async def register(self, payload: RegisterReq) -> RegisterRes:
-        # Hashed, not the raw address: emails must not appear in logs.
         log.info("registering user %s", hash_secret(payload.email.strip().lower())[:12])
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
@@ -81,10 +80,6 @@ class Auth:
             raise UserAlreadyExists("User already exists")
 
         now = get_current_time()
-        # Without a mail provider an OTP can never be delivered, so the account
-        # is created unverified with no OTP. The account can log in (login only
-        # requires verification when a provider is configured) and can verify
-        # later once a provider is set up.
         email_enabled = settings.email_enabled
         otp = generate_otp() if email_enabled else None
         user_payload = UserModel(
@@ -125,7 +120,6 @@ class Auth:
         )
 
     async def verify_user(self, email: str, otp: str) -> VerifyUserRes:
-        # Hashed, not the raw address: emails must not appear in logs.
         log.info("verifying user %s", hash_secret(email.strip().lower())[:12])
 
         if not settings.email_enabled:
@@ -136,7 +130,6 @@ class Auth:
 
         email = email.strip().lower()
 
-        # Throttle OTP guessing per email, independent of the source IP.
         retry_after = await otp_attempts.locked(
             f"otp:{email}",
             settings.OTP_VERIFY_ATTEMPTS,
@@ -147,8 +140,6 @@ class Auth:
 
         user = await self.db.users.find_one({"email": email})
 
-        # Unknown email and already-verified accounts are indistinguishable
-        # from a wrong OTP: compare against a throwaway hash and fail.
         if not user or user.get("is_verified"):
             verify_otp(DUMMY_OTP_HASH, otp)
             await otp_attempts.record(f"otp:{email}", settings.OTP_EXPIRY * 60)
@@ -190,7 +181,6 @@ class Auth:
         return VerifyUserRes(token=token, refresh_token=refresh_token)
 
     async def resend_otp(self, email: str) -> ResendOtpRes:
-        # Hashed, not the raw address: emails must not appear in logs.
         log.info("resending otp for user %s", hash_secret(email.strip().lower())[:12])
 
         if not settings.email_enabled:
@@ -201,7 +191,6 @@ class Auth:
 
         email = email.strip().lower()
 
-        # Bound resends per email to stop OTP email bombing.
         retry_after = await otp_resends.allow(
             f"resend:{email}",
             settings.OTP_RESEND_LIMIT,
@@ -212,8 +201,6 @@ class Auth:
 
         user = await self.db.users.find_one({"email": email})
 
-        # Unknown and already-verified accounts are indistinguishable from a
-        # successful resend: no email is sent, but the response is identical.
         if not user or user.get("is_verified"):
             return ResendOtpRes(success=True)
 
@@ -243,7 +230,6 @@ class Auth:
         return ResendOtpRes(success=True)
 
     async def login(self, payload: LoginReq) -> LoginRes:
-        # Hashed, not the raw address: emails must not appear in logs.
         log.info("logging in user %s", hash_secret(payload.email.strip().lower())[:12])
 
         if self.db.users is None:
@@ -251,8 +237,6 @@ class Auth:
 
         email = payload.email.strip().lower()
 
-        # Per-email lockout, checked before any account lookup so the lockout
-        # itself cannot be used to confirm an account exists.
         retry_after = await login_failures.locked(
             f"fail:{email}",
             settings.LOGIN_FAILURE_LIMIT,
@@ -263,8 +247,6 @@ class Auth:
 
         user = await self.db.users.find_one({"email": email})
 
-        # Unknown email and wrong password must be indistinguishable: same
-        # status, same body, comparable timing (dummy Argon2 verify).
         if not user:
             verify_password(payload.password, DUMMY_HASH)
             await login_failures.record(
@@ -278,11 +260,6 @@ class Auth:
             )
             raise InvalidCredentials("invalid credentials")
 
-        # The unverified gate exists so the owner knows who actually controls
-        # a mailbox. With no provider configured verification is impossible, so
-        # unverified users must be allowed to log in; the API reports
-        # email_verified=False and the CLI warns about it on sensitive actions.
-        # With a provider configured, unverified accounts stay locked out.
         if not user.get("is_verified") and settings.email_enabled:
             raise UserNotVerified("User is unverified")
 
@@ -330,9 +307,6 @@ class Auth:
         if not user or user.get("token_version", 0) != token_version:
             raise InvalidRefreshToken("invalid refresh token")
 
-        # Single-use: the atomic swap below means only one concurrent use of a
-        # refresh token can win. A stale jti with a still-valid version means
-        # the token was replayed or raced, so revoke the whole chain.
         if token_version is None:
             raise InvalidRefreshToken("invalid refresh token")
 
@@ -367,7 +341,6 @@ class Auth:
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
-        # Revokes every access and refresh token issued for this user.
         res = await self.db.users.update_one(
             {"_id": ObjectId(user_id)},
             {

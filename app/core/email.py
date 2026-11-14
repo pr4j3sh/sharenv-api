@@ -42,9 +42,6 @@ async def _deliver(
     provider = settings.EMAIL_PROVIDER
 
     if settings.DEBUG or provider == "console":
-        # Dev-only escape hatch so registration/verification can be exercised
-        # without a real mail provider. Never enable DEBUG in production:
-        # this logs the secret.
         log.info("console email provider: kind=%s to=%s secret=%s", kind, to, secret)
         return {"id": "console"}
 
@@ -63,7 +60,6 @@ async def _deliver(
     if provider == "smtp":
         return await _send_via_smtp(to, subject, html)
 
-    # "none": callers must not invoke delivery when no provider is configured.
     raise RuntimeError("email provider is not configured (EMAIL_PROVIDER=none)")
 
 

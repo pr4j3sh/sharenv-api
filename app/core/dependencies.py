@@ -52,8 +52,6 @@ async def get_current_user_id(
     if mongo.users is None:
         raise RuntimeError("mongodb is not connected")
 
-    # Re-check the user on every request: a deleted user loses access
-    # immediately, and a bumped token_version revokes all their tokens.
     user = await mongo.users.find_one({"_id": user_oid}, {"token_version": 1})
 
     if user is None:

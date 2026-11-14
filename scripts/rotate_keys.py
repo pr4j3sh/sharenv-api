@@ -1,18 +1,3 @@
-"""Re-encrypt stored data under the active master key version.
-
-Walks every project, re-wraps its data key under the active master key
-version, and re-encrypts every variable value so its `key_version` and AAD
-match. Idempotent and resumable: documents already on the active version are
-skipped, so a crashed run can simply be re-run.
-
-Runbook: docs/key-rotation.md
-
-Usage (from the repository root, so `.env` is loaded):
-
-    uv run python -m scripts.rotate_keys --dry-run
-    uv run python -m scripts.rotate_keys
-"""
-
 import argparse
 import asyncio
 import sys
@@ -169,8 +154,6 @@ async def _rotate(dry_run: bool) -> int:
 
             counts["variables_reencrypted"] += 1
 
-    # Variables that belong to no environment can never be decrypted again;
-    # report them instead of silently ignoring.
     orphans = await mongo.variables.find(
         {"environment_id": {"$nin": sorted(known_env_ids)}}
     ).to_list(length=None)

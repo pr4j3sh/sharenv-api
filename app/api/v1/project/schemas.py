@@ -22,7 +22,6 @@ class CreateProjectRes(BaseModel):
 
 
 class DeleteProjectReq(BaseModel):
-    # The caller's current password; deleting a project re-authenticates.
     password: str
 
     @field_validator("password")
@@ -44,9 +43,6 @@ class GetProjectsRes(MongoDocument):
 
 
 class MemberRes(BaseModel):
-    # Owner-only view of project membership. Email is resolved by joining the
-    # users collection; unknown (deleted) accounts are reported with an empty
-    # email rather than failing the whole list.
     user_id: str
     email: str
     role: Literal["owner", "writer", "reader"]
@@ -54,12 +50,8 @@ class MemberRes(BaseModel):
 
 
 class UpdateMemberAccessReq(BaseModel):
-    # Full replacement of the member's granted environment ids (add/remove by
-    # inclusion). Each id must belong to the project.
     environments: list[str]
-    # Optionally adjust the member's role in the same request.
     role: Literal["writer", "reader"] | None = None
-    # Owner re-authentication.
     password: str
 
     @field_validator("password")
@@ -76,7 +68,6 @@ class UpdateMemberAccessRes(BaseModel):
 
 
 class RemoveMemberReq(BaseModel):
-    # Owner re-authentication (required for removing another member).
     password: str
 
     @field_validator("password")

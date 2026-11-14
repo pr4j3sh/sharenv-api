@@ -49,7 +49,6 @@ class Invitation:
         if self.db.environments is None:
             raise RuntimeError("mongodb is not connected")
 
-        # de-dupe, preserve order
         unique_ids = list(dict.fromkeys(environment_ids))
 
         try:
@@ -86,12 +85,10 @@ class Invitation:
 
         email = payload.email.strip().lower()
 
-        # Cannot invite self (owner).
         owner = await self.db.users.find_one({"_id": ObjectId(project["user_id"])})
         if owner and owner.get("email", "").strip().lower() == email:
             raise CannotModifyOwner("cannot invite the project owner")
 
-        # If the invitee already has an account, ensure they aren't already a member.
         invitee = await self.db.users.find_one({"email": email})
         if invitee:
             invitee_id = str(invitee["_id"])
@@ -102,7 +99,6 @@ class Invitation:
 
         now = get_current_time()
 
-        # Disallow a duplicate pending (unaccepted, unexpired) invitation.
         existing = await self.db.invitations.find_one(
             {
                 "project_id": project_id,
@@ -134,10 +130,6 @@ class Invitation:
         if not res or not res.inserted_id:
             raise InvitationNotFound("failed to create invitation")
 
-        # Only send mail when a provider is configured. Delivery is
-        # best-effort: the owner receives the token below either way and can
-        # deliver it out-of-band, so an SMTP failure must not roll back an
-        # invitation that is still fully usable via copy-link.
         email_sent = False
         if settings.email_enabled:
             try:
@@ -233,10 +225,6 @@ class Invitation:
         if not user:
             raise UserNotFound("user not found")
 
-        # Without a provider configured, verification is impossible, so
-        # possession of the out-of-band token plus the email match is the
-        # proof of identity. With a provider configured, the account must
-        # have completed verification first.
         if not user.get("is_verified") and settings.email_enabled:
             raise InvitationEmailMismatch("email not verified")
 
@@ -250,9 +238,7 @@ class Invitation:
         if not project:
             raise ProjectNotFound("project does not exist")
 
-        # Ensure not already a member/owner.
         if resolve_access(project, user_id) is not None:
-            # Mark accepted to avoid reuse if somehow pending.
             await self.db.invitations.update_one(
                 {"_id": invitation["_id"], "accepted_at": None},
                 {"$set": {"accepted_at": now.isoformat()}},
@@ -265,7 +251,6 @@ class Invitation:
             "environments": invitation.get("environments", []),
         }
 
-        # Claim the invitation atomically, then add the member.
         claimed = await self.db.invitations.find_one_and_update(
             {"_id": invitation["_id"], "accepted_at": None},
             {"$set": {"accepted_at": now.isoformat()}},

@@ -23,7 +23,7 @@ class MemberNotFound(Exception):
 
 
 class ForbiddenAccess(Exception):
-    """Authenticated but not permitted for this action/role."""
+    pass
 
 
 class CannotModifyOwner(Exception):

@@ -214,7 +214,6 @@ class Project:
         if self.db.users is None:
             raise RuntimeError("mongodb is not connected")
 
-        # Owner-only; hidden as 404 for everyone else.
         project = await get_owned_project(user_id, project_id)
 
         member_docs = list(project.get("members", []))
@@ -236,7 +235,6 @@ class Project:
             )
             email_by_id = {str(u["_id"]): u.get("email", "") for u in users}
 
-        # The owner has implicit access to every environment in the project.
         all_env_ids: list[str] = []
 
         if self.db.environments is not None:
@@ -295,7 +293,6 @@ class Project:
         if member is None:
             raise MemberNotFound("member not found")
 
-        # Validate that every granted environment belongs to this project.
         if payload.environments:
             try:
                 env_oids = [ObjectId(eid) for eid in payload.environments]
@@ -310,7 +307,7 @@ class Project:
                 raise ProjectNotFound("one or more environments do not exist")
 
         new_role = payload.role or member.get("role", "reader")
-        new_envs = list(dict.fromkeys(payload.environments))  # de-dupe, preserve order
+        new_envs = list(dict.fromkeys(payload.environments))
 
         res = await self.db.projects.update_one(
             {"_id": project["_id"], "members.user_id": member_id},

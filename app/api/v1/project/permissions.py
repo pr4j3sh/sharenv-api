@@ -7,7 +7,6 @@ Role = Literal["owner", "writer", "reader"]
 @dataclass(frozen=True)
 class Access:
     role: Role
-    # None means all environments (owner). For members, the explicit grant list.
     environments: list[str] | None
 
     def can_read(self) -> bool:

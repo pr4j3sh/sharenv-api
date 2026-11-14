@@ -4,7 +4,6 @@ set -e
 CERT_DIR=/etc/nginx/certs
 CONFIG_DIR=/opt/sharenv-nginx
 
-# Always installed: the auth rate-limit zone used by both configs.
 cp "$CONFIG_DIR/rate_limit.conf" /etc/nginx/conf.d/rate_limit.conf
 
 if [ -f "$CERT_DIR/fullchain.pem" ] && [ -f "$CERT_DIR/privkey.pem" ]; then

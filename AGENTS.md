@@ -23,6 +23,8 @@ FastAPI + async MongoDB (PyMongo `AsyncMongoClient`) API for managing projects, 
 
 ## Conventions and gotchas
 
+- No comments or docstrings in code. Prefer self-explanatory names and structure; where the reasoning matters, put it in `docs/` or this file instead. Functional directives (shebangs, the Dockerfile `# syntax` line) are the only allowed `#` lines.
+
 - Services raise module-local exceptions; routes translate them to `HTTPException` and have a catch-all that logs and returns 500. Don't raise `HTTPException` from services.
 - Cross-feature exceptions are imported directly (environment raises `ProjectNotFound`/`UserNotFound`; variable raises `EnvironmentNotFound`; environment raises `DeleteVariableFailed`) instead of being redefined.
 - Status-code mapping is normalized: `401` is for missing/invalid/expired bearer authentication only; `404` is for not-found-or-not-a-member (private resources are hidden); `403` is for an authenticated member who is authenticated but forbidden (e.g. reader attempting a write). Keep new routes aligned with this policy.

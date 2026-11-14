@@ -10,9 +10,6 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from app.core.config import settings
 
-# Master key ciphers by version, built once from the configured registry.
-# ENCRYPTION_KEY_VERSION is the active version used for new writes; older
-# versions stay configured so existing wrapped keys remain decryptable.
 _master_ciphers: dict[int, AESGCM] | None = None
 
 
@@ -22,8 +19,6 @@ def generate_otp() -> str:
 
 
 def hash_secret(value: str) -> str:
-    # HMAC keyed with JWT_SECRET acts as a server-side pepper: a database-only
-    # attacker cannot verify guesses for the stored hash offline.
     return hmac.new(
         settings.JWT_SECRET.encode(), value.encode(), hashlib.sha256
     ).hexdigest()
@@ -37,8 +32,6 @@ def verify_otp(stored_hash: str, otp: str) -> bool:
     return secrets.compare_digest(stored_hash, hash_otp(otp))
 
 
-# Lets callers run an OTP comparison against a fixed throwaway hash when the
-# account does not exist, so timing does not reveal account existence.
 DUMMY_OTP_HASH = hash_otp(secrets.token_urlsafe(32))
 
 
@@ -91,9 +84,6 @@ def unwrap_data_key(wrapped_key: str, key_version: int) -> bytes:
 
 
 def _aad(project_id: str, environment_id: str, name: str, key_version: int) -> bytes:
-    # JSON array, not a delimiter-joined string, so a name containing ":"
-    # cannot shift fields, and so a ciphertext cannot be re-labelled with a
-    # different project or key version.
     return json.dumps(
         [project_id, environment_id, name, key_version],
         separators=(",", ":"),

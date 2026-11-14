@@ -82,8 +82,6 @@ class Environment:
         if not res or not res.inserted_id:
             raise CreateEnvironmentError("failed to create environment")
 
-        # Note: writer-created environments are not auto-granted; owner controls
-        # env access grants explicitly.
         return CreateEnvironmentRes(environment_id=str(res.inserted_id))
 
     async def get_environments(
@@ -105,7 +103,6 @@ class Environment:
 
         access = resolve_access(project, user_id)
         if access is None:
-            # Hide the project's environments from non-members.
             raise ProjectNotFound("Project does not exist")
 
         query: dict = {"project_id": project_id}
@@ -154,12 +151,10 @@ class Environment:
             {"_id": ObjectId(environment["project_id"])}
         )
         if not project:
-            # Hide the environment's project from the caller.
             raise EnvironmentNotFound("environment does not exist")
 
         access = resolve_access(project, user_id)
         if access is None or not access.can_access_env(environment_id):
-            # Hide environments the caller cannot access.
             raise EnvironmentNotFound("environment does not exist")
         if not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")
@@ -202,12 +197,10 @@ class Environment:
             {"_id": ObjectId(environment["project_id"])}
         )
         if not project:
-            # Hide the environment's project from the caller.
             raise EnvironmentNotFound("environment does not exist")
 
         access = resolve_access(project, user_id)
         if access is None or not access.can_access_env(environment_id):
-            # Hide environments the caller cannot access.
             raise EnvironmentNotFound("environment does not exist")
         if not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")

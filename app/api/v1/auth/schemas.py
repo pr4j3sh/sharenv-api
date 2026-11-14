@@ -29,8 +29,6 @@ class RegisterReq(BaseModel):
 
 class RegisterRes(BaseModel):
     success: bool
-    # False when no mail provider is configured (EMAIL_PROVIDER=none):
-    # the account is created unverified and verification is impossible.
     verification_required: bool = True
 
 

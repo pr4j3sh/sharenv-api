@@ -16,9 +16,7 @@ from app.core.validation import MAX_EMAIL_LENGTH
 class CreateInvitationReq(BaseModel):
     email: EmailStr = Field(max_length=MAX_EMAIL_LENGTH)
     role: Literal["writer", "reader"]
-    # Granted environment ids (must belong to the project; may be empty).
     environments: list[str] = Field(default_factory=list)
-    # Owner re-authentication.
     password: str
 
     @field_validator("email")
@@ -49,11 +47,7 @@ class CreateInvitationRes(SerializableDocument):
     role: Literal["writer", "reader"]
     environments: list[str]
     expires_at: datetime
-    # The raw invitation token, returned to the owner at creation time so the
-    # invite can be delivered out-of-band (e.g. pasted into chat). Stored
-    # hashed server-side; this is the only time it is exposed.
     token: str
-    # True when a mail provider is configured and an invitation email was sent.
     email_sent: bool
 
 
@@ -69,7 +63,6 @@ class GetInvitationRes(MongoDocument):
 
 
 class CancelInvitationReq(BaseModel):
-    # Owner re-authentication.
     password: str
 
     @field_validator("password")

@@ -9,8 +9,6 @@ from app.core.serialization import MongoDocument, SerializableDocument
 class ProjectMember(SerializableDocument):
     user_id: str
     role: Literal["writer", "reader"]
-    # Granted environment ids (explicit list). Owner is not stored here and has
-    # implicit access to all environments.
     environments: list[str] = Field(default_factory=list)
 
 

@@ -77,12 +77,10 @@ class Variable:
             {"_id": ObjectId(environment["project_id"])}
         )
         if not project:
-            # Hide the environment's project from the caller.
             raise EnvironmentNotFound("Environment does not exist")
 
         access = resolve_access(project, user_id)
         if access is None or not access.can_access_env(environment_id):
-            # Hide environments the caller cannot access.
             raise EnvironmentNotFound("Environment does not exist")
         if write and not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")
@@ -118,7 +116,6 @@ class Variable:
 
         access = resolve_access(project, user_id)
         if access is None or not access.can_access_env(env_id):
-            # Hide variables in environments the caller cannot access.
             raise VariableNotFound("Variable does not exist")
         if write and not access.can_write():
             raise UnauthorizedAccess("Unauthorized Access")

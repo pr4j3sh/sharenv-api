@@ -1,5 +1,3 @@
-"""Shared input validation helpers and limits."""
-
 from __future__ import annotations
 
 import json
@@ -10,9 +8,6 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import HTTPException
 
-# Names: project/environment are lowercase slug-like; variables follow a safe
-# env/dotenv identifier shape to prevent `.env` injection (newline/=/#/etc.)
-# and to keep the AAD-bound name unambiguous.
 PROJECT_ENV_NAME_RE = re.compile(r"^[a-z0-9_-]+$")
 VARIABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -25,7 +20,6 @@ MAX_REFRESH_TOKEN_LENGTH = 4096
 MAX_INVITATION_TOKEN_LENGTH = 512
 MAX_REQUEST_BODY_BYTES = 256 * 1024
 
-# Quotas (defaults; enforced in services)
 DEFAULT_MAX_PROJECTS_PER_USER = 50
 DEFAULT_MAX_ENVIRONMENTS_PER_PROJECT = 50
 DEFAULT_MAX_VARIABLES_PER_ENVIRONMENT = 500
@@ -33,7 +27,6 @@ DEFAULT_MAX_TOTAL_VALUE_BYTES_PER_PROJECT = 5 * 1024 * 1024
 
 
 def parse_object_id(value: str, *, label: str = "id") -> ObjectId:
-    """Parse a path/body identifier or raise a 400 HTTP error."""
     try:
         return ObjectId(value)
     except (InvalidId, TypeError) as e:
@@ -89,7 +82,6 @@ def validate_project_env_name(value: str, *, kind: str) -> str:
 
 
 def validate_variable_value_size(value: Any) -> Any:
-    # Values are JSON-serialized for encryption; bound the serialized size.
     try:
         encoded = json.dumps(value).encode("utf-8")
     except (TypeError, ValueError) as e:
